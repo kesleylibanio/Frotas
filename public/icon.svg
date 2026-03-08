@@ -1,0 +1,15 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="none"/>
+  <path d="M40 100H360V380H40V100Z" fill="#DC2626"/>
+  <path d="M360 200H480L500 300V380H360V200Z" fill="#DC2626"/>
+  <circle cx="140" cy="420" r="50" fill="black"/>
+  <circle cx="140" cy="420" r="30" fill="#F3F4F6"/>
+  <circle cx="420" cy="420" r="50" fill="black"/>
+  <circle cx="420" cy="420" r="30" fill="#F3F4F6"/>
+  <path d="M40 380H500V400H40V380Z" fill="#DC2626"/>
+  
+  <!-- Water Drop Logo -->
+  <path d="M200 180C200 180 140 260 140 300C140 333.137 166.863 360 200 360C233.137 360 260 333.137 260 300C260 260 200 180 200 180Z" fill="white"/>
+  <path d="M200 190C200 190 150 260 150 295C150 322.614 172.386 345 200 345C227.614 345 250 322.614 250 295C250 260 200 190 200 190Z" fill="#DC2626"/>
+  <path d="M200 200C200 200 160 260 160 290C160 312.091 177.909 330 200 330C222.091 330 240 312.091 240 290C240 260 200 200 200 200Z" fill="white"/>
+</svg>

@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "Application users and their roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "mechanic"] },
+        "displayName": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "vehicles": {
+      "title": "Vehicle",
+      "description": "Fleet vehicles",
+      "type": "object",
+      "properties": {
+        "number": { "type": "string" },
+        "type": { "type": "string" },
+        "plate": { "type": "string" },
+        "km_current": { "type": "integer" },
+        "status": { "type": "string" },
+        "last_maintenance_km": { "type": "integer" },
+        "is_contracted": { "type": "boolean" },
+        "contract_company": { "type": "string" },
+        "contract_closing_day": { "type": "integer" },
+        "contract_value": { "type": "number" }
+      },
+      "required": ["plate", "type", "km_current"]
+    },
+    "maintenances": {
+      "title": "Maintenance",
+      "description": "Maintenance records",
+      "type": "object",
+      "properties": {
+        "vehicle_id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "start_time": { "type": "string" },
+        "end_time": { "type": "string" },
+        "type": { "type": "string" },
+        "km": { "type": "integer" },
+        "mechanic": { "type": "string" },
+        "services": { "type": "string" },
+        "other_services": { "type": "string" },
+        "observations": { "type": "string" },
+        "cost": { "type": "number" }
+      },
+      "required": ["vehicle_id", "date", "km", "mechanic"]
+    },
+    "agenda": {
+      "title": "Agenda",
+      "description": "Workshop schedule",
+      "type": "object",
+      "properties": {
+        "day_of_week": { "type": "string" },
+        "vehicle_id": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["day_of_week", "vehicle_id"]
+    },
+    "maintenance_intervals": {
+      "title": "Maintenance Interval",
+      "description": "Service intervals",
+      "type": "object",
+      "properties": {
+        "service_type": { "type": "string" },
+        "interval_km": { "type": "integer" }
+      },
+      "required": ["service_type", "interval_km"]
+    }
+  },
+  "firestore": {
+    "users": { "schema": "users", "description": "User profiles" },
+    "vehicles": { "schema": "vehicles", "description": "Fleet vehicles" },
+    "maintenances": { "schema": "maintenances", "description": "Maintenance records" },
+    "agenda": { "schema": "agenda", "description": "Workshop schedule" },
+    "maintenance_intervals": { "schema": "maintenance_intervals", "description": "Service intervals" }
+  }
+}
