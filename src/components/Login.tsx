@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Lock, User } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { supabaseService } from '../services/supabaseService';
 
 interface LoginProps {
-  onLogin: (user: any) => void;
+  onLogin: (role: 'admin' | 'mechanic') => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -21,18 +20,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // The onAuthStateChanged in App.tsx will handle the state update
-      // But we can also call onLogin here if needed immediately
-    } catch (err: any) {
-      console.error("Login error:", err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('Email ou senha inválidos.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Muitas tentativas falhas. Tente novamente mais tarde.');
+      const role = await supabaseService.login(username, password);
+      if (role) {
+        onLogin(role);
       } else {
-        setError('Erro ao fazer login. Tente novamente.');
+        setError('Credenciais inválidas. Tente novamente.');
       }
+    } catch (err) {
+      console.error('Erro ao fazer login:', err);
+      setError('Erro ao conectar ao servidor. Verifique sua conexão.');
     } finally {
       setLoading(false);
     }
@@ -55,15 +51,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Email</label>
+            <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Usuário</label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text" 
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-500 outline-none transition-all"
-                placeholder="Digite seu email"
+                placeholder="Digite seu usuário"
                 required
               />
             </div>
@@ -104,9 +100,16 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-all shadow-lg shadow-red-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin" size={20} />
+                Entrando...
+              </>
+            ) : (
+              'Entrar'
+            )}
           </button>
         </form>
       </motion.div>

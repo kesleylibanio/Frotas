@@ -254,5 +254,18 @@ export const supabaseService = {
       available,
       maintenancesThisMonth: maintenancesThisMonth || 0
     };
+  },
+
+  // Auth
+  login: async (username: string, password: string): Promise<'admin' | 'mechanic' | null> => {
+    const { data, error } = await getSupabase()
+      .from('app_users')
+      .select('role')
+      .eq('username', username)
+      .eq('password', password)
+      .single();
+    
+    if (error || !data) return null;
+    return data.role as 'admin' | 'mechanic';
   }
 };
