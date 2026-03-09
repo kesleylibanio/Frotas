@@ -9,7 +9,7 @@ export interface User {
 }
 
 export interface Vehicle {
-  id: number;
+  id: string;
   type: 'Carreta' | 'Pipa' | 'Traçado';
   plate: string;
   km_current: number;
@@ -22,8 +22,8 @@ export interface Vehicle {
 }
 
 export interface Maintenance {
-  id: number;
-  vehicle_id: number;
+  id: string;
+  vehicle_id: string;
   vehicle_plate?: string;
   vehicle_type?: string;
   date: string;
@@ -32,14 +32,14 @@ export interface Maintenance {
   type: 'Preventiva' | 'Corretiva' | 'Preditiva';
   km: number;
   mechanic: string;
-  services: string; // JSON string in DB
+  services: any[]; // Array of objects or strings
   other_services: string;
   observations: string;
   cost: number;
 }
 
 export interface MaintenanceInterval {
-  id: number;
+  id: string;
   service_type: string;
   interval_km: number;
 }
@@ -52,12 +52,17 @@ export interface ReportData {
 }
 
 export interface AgendaItem {
-  id: number;
+  id: string;
   day_of_week: string;
-  vehicle_id: number;
+  vehicle_id: string;
   vehicle_plate: string;
   vehicle_type: string;
   status: 'Pendente' | 'Concluído';
+}
+
+export interface Mechanic {
+  id: string;
+  name: string;
 }
 
 export const MAINTENANCE_TYPES = [

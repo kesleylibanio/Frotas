@@ -62,6 +62,7 @@ import {
   MaintenanceInterval,
   ReportData
 } from './types';
+import { supabaseService } from './services/supabaseService';
 
 // --- Components ---
 
@@ -638,7 +639,7 @@ const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>,
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ ...formData, number: formData.plate });
+    onSave(formData);
   };
 
   return (
@@ -1032,9 +1033,10 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
   };
 
   const confirmSave = () => {
+    const { mechanics, ...rest } = formData;
     const dataToSave = {
-      ...formData,
-      mechanic: formData.mechanics.join(', ')
+      ...rest,
+      mechanic: mechanics.join(', ')
     };
     onSave(dataToSave);
     localStorage.removeItem('maintenance_form_draft');
@@ -1408,14 +1410,13 @@ const Reports = ({ vehicles }: { vehicles: Vehicle[] }) => {
 
   const fetchMaintenances = async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (filters.startDate) params.append('startDate', filters.startDate);
-    if (filters.endDate) params.append('endDate', filters.endDate);
-    
     try {
-      const res = await fetch(`/api/reports?${params.toString()}`);
-      const data = await res.json();
-      setAllMaintenances(data.maintenances || []);
+      const data = await supabaseService.getMaintenances(
+        undefined, 
+        filters.startDate, 
+        filters.endDate
+      );
+      setAllMaintenances(data);
     } catch (error) {
       console.error("Erro ao buscar manutenções:", error);
     } finally {
@@ -1996,20 +1997,20 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      const [vRes, aRes, sRes, iRes, mRes, allMRes] = await Promise.all([
-        fetch('/api/vehicles'),
-        fetch('/api/agenda'),
-        fetch('/api/stats'),
-        fetch('/api/intervals'),
-        fetch('/api/mechanics'),
-        fetch('/api/maintenances')
+      const [vData, aData, sData, iData, mData, allMData] = await Promise.all([
+        supabaseService.getVehicles(),
+        supabaseService.getAgenda(),
+        supabaseService.getStats(),
+        supabaseService.getIntervals(),
+        supabaseService.getMechanics(),
+        supabaseService.getMaintenances()
       ]);
-      setVehicles(await vRes.json());
-      setAgenda(await aRes.json());
-      setStats(await sRes.json());
-      setIntervals(await iRes.json());
-      setMechanics(await mRes.json());
-      setAllMaintenances(await allMRes.json());
+      setVehicles(vData);
+      setAgenda(aData);
+      setStats(sData);
+      setIntervals(iData);
+      setMechanics(mData);
+      setAllMaintenances(allMData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -2018,34 +2019,22 @@ export default function App() {
   };
 
   const handleSaveMechanic = async (name: string, id?: number) => {
-    const url = id ? `/api/mechanics/${id}` : '/api/mechanics';
-    const method = id ? 'PUT' : 'POST';
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    });
+    await supabaseService.saveMechanic(name, id);
     fetchData();
   };
 
   const handleDeleteMechanic = async (id: number) => {
-    await fetch(`/api/mechanics/${id}`, { method: 'DELETE' });
+    await supabaseService.deleteMechanic(id);
     fetchData();
   };
 
   const handleSaveInterval = async (data: any) => {
-    const url = data.id ? `/api/intervals/${data.id}` : '/api/intervals';
-    const method = data.id ? 'PUT' : 'POST';
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
+    await supabaseService.saveInterval(data);
     fetchData();
   };
 
   const handleDeleteInterval = async (id: number) => {
-    await fetch(`/api/intervals/${id}`, { method: 'DELETE' });
+    await supabaseService.deleteInterval(id);
     fetchData();
   };
 
@@ -2054,14 +2043,8 @@ export default function App() {
   }, []);
 
   const handleSaveVehicle = async (data: any) => {
-    const url = editingVehicle?.id ? `/api/vehicles/${editingVehicle.id}` : '/api/vehicles';
-    const method = editingVehicle?.id ? 'PUT' : 'POST';
-    
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
+    const payload = editingVehicle?.id ? { ...data, id: editingVehicle.id } : data;
+    await supabaseService.saveVehicle(payload);
     
     setEditingVehicle(null);
     fetchData();
@@ -2073,13 +2056,7 @@ export default function App() {
     if (!deletingVehicle) return;
 
     try {
-      const res = await fetch(`/api/vehicles/${deletingVehicle.id}`, {
-        method: 'DELETE'
-      });
-      
-      if (!res.ok) {
-        throw new Error('Falha ao excluir veículo');
-      }
+      await supabaseService.deleteVehicle(deletingVehicle.id);
       
       setDeletingVehicle(null);
       fetchData();
@@ -2096,25 +2073,15 @@ export default function App() {
   const handleQuickUpdateKM = async () => {
     if (!updatingKMVehicle) return;
     
-    await fetch(`/api/vehicles/${updatingKMVehicle.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...updatingKMVehicle, km_current: newKM })
-    });
+    await supabaseService.saveVehicle({ ...updatingKMVehicle, km_current: newKM });
     
     setUpdatingKMVehicle(null);
     fetchData();
   };
 
   const handleSaveMaintenance = async (data: any) => {
-    const url = editingMaintenance ? `/api/maintenances/${editingMaintenance.id}` : '/api/maintenances';
-    const method = editingMaintenance ? 'PUT' : 'POST';
-    
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
+    const payload = editingMaintenance ? { ...data, id: editingMaintenance.id } : data;
+    await supabaseService.saveMaintenance(payload);
     
     setEditingMaintenance(null);
     setActiveTab('dashboard');
@@ -2122,34 +2089,22 @@ export default function App() {
   };
 
   const handleAgendaMove = async (id: number, day: string) => {
-    await fetch(`/api/agenda/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ day_of_week: day })
-    });
+    await supabaseService.saveAgenda({ id, day_of_week: day });
     fetchData();
   };
 
   const handleAgendaComplete = async (id: number) => {
-    await fetch(`/api/agenda/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'Concluído' })
-    });
+    await supabaseService.saveAgenda({ id, status: 'Concluído' });
     fetchData();
   };
 
   const handleAgendaDelete = async (id: number) => {
-    await fetch(`/api/agenda/${id}`, { method: 'DELETE' });
+    await supabaseService.deleteAgenda(id);
     fetchData();
   };
 
   const handleAgendaAdd = async (entry: any) => {
-    await fetch('/api/agenda', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ day_of_week: entry.day, vehicle_id: entry.vehicleId })
-    });
+    await supabaseService.saveAgenda({ day_of_week: entry.day, vehicle_id: entry.vehicleId });
     fetchData();
   };
 
@@ -2165,8 +2120,8 @@ export default function App() {
 
   const viewHistory = async (v: Vehicle) => {
     setSelectedVehicle(v);
-    const res = await fetch(`/api/maintenances?vehicleId=${v.id}`);
-    setVehicleHistory(await res.json());
+    const data = await supabaseService.getMaintenances(v.id);
+    setVehicleHistory(data);
     setActiveTab('history');
   };
 
