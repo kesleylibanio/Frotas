@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { supabaseService } from '../services/supabaseService';
 
 interface LoginProps {
-  onLogin: (role: 'admin' | 'mechanic') => void;
+  onLogin: (role: 'admin' | 'mechanic', username: string) => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -22,7 +22,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     try {
       const role = await supabaseService.login(username, password);
       if (role) {
-        onLogin(role);
+        onLogin(role, username);
       } else {
         setError('Credenciais inválidas. Tente novamente.');
       }

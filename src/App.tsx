@@ -243,8 +243,6 @@ const Contracts = ({ vehicles }: { vehicles: Vehicle[] }) => {
 const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicles: Vehicle[], stats: any, intervals: MaintenanceInterval[], maintenances: any[], role?: 'admin' | 'mechanic' }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [spotlightVehicle, setSpotlightVehicle] = useState<Vehicle | null>(null);
-  const alertThreshold = 1000;
-
   const filteredVehicles = vehicles.filter(v => 
     v.plate.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -254,28 +252,31 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
       .filter(m => m.vehicle_id === v.id)
       .sort((a, b) => b.km - a.km);
     
-    return intervals.map(interval => {
-      const lastService = vehicleMaintenances.find(m => {
-        const services = JSON.parse(m.services || '[]');
-        return services.some((s: any) => (typeof s === 'object' ? s.name : s) === interval.service_type);
-      });
+    return intervals
+      .filter(i => (i.measurement_type || 'odometer') === (v.measurement_type || 'odometer'))
+      .map(interval => {
+        const lastService = vehicleMaintenances.find(m => {
+          const services = JSON.parse(m.services || '[]');
+          return services.some((s: any) => (typeof s === 'object' ? s.name : s) === interval.service_type);
+        });
 
-      const lastKM = lastService ? lastService.km : (v.last_maintenance_km || 0);
-      const kmSinceLast = (v.km_current || 0) - lastKM;
-      const remaining = interval.interval_km - kmSinceLast;
+        const lastKM = lastService ? lastService.km : (v.last_maintenance_km || 0);
+        const kmSinceLast = (v.km_current || 0) - lastKM;
+        const remaining = interval.interval_km - kmSinceLast;
+        const threshold = interval.interval_km * 0.1;
 
-      if (remaining <= alertThreshold) {
-        return {
-          vehicle: v,
-          service: interval.service_type,
-          interval: interval.interval_km,
-          remaining,
-          isOverdue: remaining < 0,
-          type: 'maintenance'
-        };
-      }
-      return null;
-    }).filter(Boolean);
+        if (remaining <= threshold) {
+          return {
+            vehicle: v,
+            service: interval.service_type,
+            interval: interval.interval_km,
+            remaining,
+            isOverdue: remaining < 0,
+            type: 'maintenance'
+          };
+        }
+        return null;
+      }).filter(Boolean);
   }).sort((a: any, b: any) => a.remaining - b.remaining) as any[];
 
   if (role === 'mechanic') {
@@ -302,9 +303,9 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                     </div>
                     <div className="text-right">
                       <span className={`text-sm font-bold ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
-                        {isOverdue ? `Atrasado ${Math.abs(remaining).toLocaleString()} km` : `Faltam ${remaining.toLocaleString()} km`}
+                        {isOverdue ? `Atrasado ${Math.abs(remaining).toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}` : `Faltam ${remaining.toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}`}
                       </span>
-                      <p className="text-xs text-slate-400">Intervalo: {(interval/1000).toFixed(0)}k km</p>
+                      <p className="text-xs text-slate-400">Intervalo: {v.measurement_type === 'hour_meter' ? `${interval}h` : `${(interval/1000).toFixed(0)}k km`}</p>
                     </div>
                   </Card>
                 );
@@ -416,8 +417,8 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                   </span>
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Km Atual</p>
-                  <p className="text-lg font-black text-slate-800">{spotlightVehicle.km_current.toLocaleString()} km</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{spotlightVehicle.measurement_type === 'hour_meter' ? 'Horas Atuais' : 'Km Atual'}</p>
+                  <p className="text-lg font-black text-slate-800">{spotlightVehicle.km_current.toLocaleString()} {spotlightVehicle.measurement_type === 'hour_meter' ? 'h' : 'km'}</p>
                 </div>
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Contrato</p>
@@ -438,7 +439,7 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                   {maintenanceAlerts.filter(a => a.vehicle.id === spotlightVehicle.id).map((alert, i) => (
                     <div key={i} className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex justify-between items-center">
                       <span className="text-sm font-bold text-amber-800">{alert.service}</span>
-                      <span className="text-xs font-bold text-amber-600">{alert.remaining < 0 ? 'VENCIDO' : `Faltam ${alert.remaining} km`}</span>
+                      <span className="text-xs font-bold text-amber-600">{alert.remaining < 0 ? 'VENCIDO' : `Faltam ${alert.remaining} ${spotlightVehicle.measurement_type === 'hour_meter' ? 'h' : 'km'}`}</span>
                     </div>
                   ))}
                   {maintenanceAlerts.filter(a => a.vehicle.id === spotlightVehicle.id).length === 0 && (
@@ -516,9 +517,9 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                   </div>
                   <div className="text-right">
                     <span className={`text-sm font-bold ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
-                      {isOverdue ? `Atrasado ${Math.abs(remaining).toLocaleString()} km` : `Faltam ${remaining.toLocaleString()} km`}
+                      {isOverdue ? `Atrasado ${Math.abs(remaining).toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}` : `Faltam ${remaining.toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}`}
                     </span>
-                    <p className="text-xs text-slate-400">Intervalo: {(interval/1000).toFixed(0)}k km</p>
+                    <p className="text-xs text-slate-400">Intervalo: {(interval/1000).toFixed(0)}k {v.measurement_type === 'hour_meter' ? 'h' : 'km'}</p>
                   </div>
                 </Card>
               );
@@ -534,7 +535,7 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
   );
 };
 
-const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete }: { vehicles: Vehicle[], onEdit: (v: Vehicle) => void, onSelect: (v: Vehicle) => void, onEditKM: (v: Vehicle) => void, onDelete: (v: Vehicle) => void }) => {
+const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete, userRole }: { vehicles: Vehicle[], onEdit: (v: Vehicle) => void, onSelect: (v: Vehicle) => void, onEditKM: (v: Vehicle) => void, onDelete: (v: Vehicle) => void, userRole: string }) => {
   const [search, setSearch] = useState('');
   const filtered = vehicles.filter(v => 
     v.plate.toLowerCase().includes(search.toLowerCase()) || 
@@ -553,10 +554,12 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete }: { vehic
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <Button onClick={() => (onEdit as any)({})}>
-          <Plus size={20} />
-          <span className="hidden sm:inline">Novo</span>
-        </Button>
+        {userRole === 'admin' && (
+          <Button onClick={() => (onEdit as any)({})}>
+            <Plus size={20} />
+            <span className="hidden sm:inline">Novo</span>
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-3">
@@ -566,7 +569,7 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete }: { vehic
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
                   v.type === 'Carreta' ? 'bg-blue-100 text-blue-700' : 
-                  v.type === 'Pipa' ? 'bg-cyan-100 text-cyan-700' : 'bg-orange-100 text-orange-700'
+                  (v.type as string).startsWith('Pipa') ? 'bg-cyan-100 text-cyan-700' : 'bg-orange-100 text-orange-700'
                 }`}>
                   <Truck size={24} />
                 </div>
@@ -582,8 +585,8 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete }: { vehic
                 }`}>
                   {v.status}
                 </span>
-                <span className="text-xs font-mono text-slate-400">Atual: {v.km_current.toLocaleString()} km</span>
-                <span className="text-[10px] text-slate-400 italic">Últ. Manut: {(v.last_maintenance_km || 0).toLocaleString()} km</span>
+                <span className="text-xs font-mono text-slate-400">Atual: {v.km_current.toLocaleString()} {v.measurement_type === 'hour_meter' ? 'h' : 'km'}</span>
+                <span className="text-[10px] text-slate-400 italic">Últ. Manut: {(v.last_maintenance_km || 0).toLocaleString()} {v.measurement_type === 'hour_meter' ? 'h' : 'km'}</span>
                 <div className="flex gap-2">
                   <button 
                     onClick={(e) => {
@@ -591,30 +594,34 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete }: { vehic
                       onEditKM(v);
                     }}
                     className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                    title="Atualizar KM"
+                    title={v.measurement_type === 'hour_meter' ? "Atualizar Horas" : "Atualizar KM"}
                   >
                     <Edit3 size={14} />
                   </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit(v);
-                    }}
-                    className="p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
-                    title="Editar Configurações"
-                  >
-                    <SettingsIcon size={14} />
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(v);
-                    }}
-                    className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                    title="Excluir Veículo"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {userRole === 'admin' && (
+                    <>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(v);
+                        }}
+                        className="p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                        title="Editar Configurações"
+                      >
+                        <SettingsIcon size={14} />
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(v);
+                        }}
+                        className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                        title="Excluir Veículo"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -627,19 +634,29 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete }: { vehic
 
 const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>, onSave: (v: any) => void, onCancel: () => void }) => {
   const [formData, setFormData] = useState({
-    type: vehicle.type || 'Carreta',
+    type: (['Carreta', 'Pipa20', 'Pipa10', 'Traçado'].includes(vehicle.type as any) ? vehicle.type : (vehicle.type === 'Caminhão Traçado' as any || vehicle.type === 'Traçado' as any ? 'Traçado' : (vehicle.type === 'Pipa de 20mil L' as any || vehicle.type === 'Pipa20' as any ? 'Pipa20' : (vehicle.type === 'Pipa de 10mil L' as any || vehicle.type === 'Pipa10' as any ? 'Pipa10' : 'Carreta')))) || 'Carreta',
     plate: vehicle.plate || '',
-    km_current: vehicle.km_current || 0,
-    status: vehicle.status || 'Rodando',
+    measurement_type: (['odometer', 'hour_meter'].includes(vehicle.measurement_type as string) ? vehicle.measurement_type : 'odometer') || 'odometer',
+    km_current: vehicle.km_current !== undefined ? vehicle.km_current : '',
+    status: (['Rodando', 'Em manutenção', 'Parado'].includes(vehicle.status as string) ? vehicle.status : 'Rodando') || 'Rodando',
     is_contracted: !!vehicle.is_contracted,
     contract_company: vehicle.contract_company || '',
-    contract_closing_day: vehicle.contract_closing_day || 1,
-    contract_value: vehicle.contract_value || 0
+    contract_work: vehicle.contract_work || '',
+    contract_start_date: vehicle.contract_start_date || '',
+    contract_closing_day: vehicle.contract_closing_day || '',
+    contract_value: vehicle.contract_value !== undefined ? vehicle.contract_value : '',
+    contract_observation: vehicle.contract_observation || ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    onSave({
+      ...formData,
+      km_current: formData.km_current === '' ? 0 : Number(formData.km_current),
+      contract_closing_day: formData.contract_closing_day === '' ? null : Number(formData.contract_closing_day),
+      contract_value: formData.contract_value === '' ? null : Number(formData.contract_value),
+      contract_start_date: formData.contract_start_date === '' ? null : formData.contract_start_date,
+    });
   };
 
   return (
@@ -650,18 +667,46 @@ const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>,
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Input label="Placa" value={formData.plate} onChange={(e: any) => setFormData({...formData, plate: e.target.value})} required />
+        <Input 
+          label="Placa" 
+          value={formData.plate} 
+          onChange={(e: any) => setFormData({...formData, plate: e.target.value.slice(0, 7)})} 
+          maxLength={7}
+          required 
+        />
         <Select 
           label="Tipo" 
           value={formData.type} 
           onChange={(e: any) => setFormData({...formData, type: e.target.value})}
           options={[
             { label: 'Carreta', value: 'Carreta' },
-            { label: 'Caminhão Pipa', value: 'Pipa' },
+            { label: 'Pipa10', value: 'Pipa10' },
+            { label: 'Pipa20', value: 'Pipa20' },
             { label: 'Caminhão Traçado', value: 'Traçado' },
           ]}
         />
-        <Input label="Quilometragem Atual" type="number" value={formData.km_current} onChange={(e: any) => setFormData({...formData, km_current: parseInt(e.target.value) || 0})} required />
+        <div className="grid grid-cols-2 gap-2">
+          <Select 
+            label="Medição" 
+            value={formData.measurement_type} 
+            onChange={(e: any) => setFormData({...formData, measurement_type: e.target.value})}
+            options={[
+              { label: 'Odômetro (km)', value: 'odometer' },
+              { label: 'Horímetro (h)', value: 'hour_meter' },
+            ]}
+          />
+          <Input 
+            label={formData.measurement_type === 'odometer' ? "Quilometragem Atual" : "Horas de Funcionamento"} 
+            type="text" 
+            value={formData.km_current} 
+            onChange={(e: any) => {
+              const val = e.target.value.replace(/\D/g, '');
+              const maxLen = formData.measurement_type === 'odometer' ? 10 : 12;
+              setFormData({...formData, km_current: val.slice(0, maxLen)});
+            }} 
+            required 
+          />
+        </div>
         <Select 
           label="Status" 
           value={formData.status} 
@@ -695,25 +740,42 @@ const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>,
               required={formData.is_contracted}
             />
             <Input 
+              label="Obra (Opcional)" 
+              value={formData.contract_work} 
+              onChange={(e: any) => setFormData({...formData, contract_work: e.target.value})} 
+            />
+            <Input 
+              label="Data de Início" 
+              type="date"
+              value={formData.contract_start_date} 
+              onChange={(e: any) => setFormData({...formData, contract_start_date: e.target.value})} 
+            />
+            <Input 
               label="Dia de Fechamento (Pagamento)" 
-              type="number" 
-              min="1" 
-              max="31"
+              type="text" 
               value={formData.contract_closing_day} 
               onChange={(e: any) => {
-                let val = parseInt(e.target.value) || 1;
-                if (val > 31) val = 31;
-                if (val < 1) val = 1;
-                setFormData({...formData, contract_closing_day: val});
+                const val = e.target.value.replace(/\D/g, '');
+                let num = parseInt(val);
+                if (num > 31) num = 31;
+                setFormData({...formData, contract_closing_day: val === '' ? '' : String(num || '')});
               }} 
               required={formData.is_contracted}
             />
             <Input 
               label="Valor do Contrato (R$)" 
-              type="number" 
+              type="text" 
               value={formData.contract_value} 
-              onChange={(e: any) => setFormData({...formData, contract_value: parseFloat(e.target.value) || 0})} 
+              onChange={(e: any) => {
+                const val = e.target.value.replace(/\D/g, '');
+                setFormData({...formData, contract_value: val.slice(0, 15)});
+              }} 
               required={formData.is_contracted}
+            />
+            <Input 
+              label="Observação (Opcional)" 
+              value={formData.contract_observation} 
+              onChange={(e: any) => setFormData({...formData, contract_observation: e.target.value})} 
             />
           </div>
         )}
@@ -727,7 +789,7 @@ const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>,
   );
 };
 
-const Agenda = ({ agenda, vehicles, onAdd, onMove, onComplete, onDelete }: any) => {
+const Agenda = ({ agenda, vehicles, onAdd, onMove, onComplete, onDelete, selectedWeek, setSelectedWeek }: any) => {
   const [showAdd, setShowAdd] = useState(false);
   const [newEntry, setNewEntry] = useState({ day: 'Segunda', vehicleId: '' });
 
@@ -736,18 +798,50 @@ const Agenda = ({ agenda, vehicles, onAdd, onMove, onComplete, onDelete }: any) 
     return acc;
   }, {} as any);
 
+  const getDayDate = (dayIndex: number) => {
+    const [year, month, day] = selectedWeek.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    d.setDate(d.getDate() + dayIndex);
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  };
+
+  const changeWeek = (offset: number) => {
+    const [year, month, day] = selectedWeek.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    d.setDate(d.getDate() + offset * 7);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setSelectedWeek(`${y}-${m}-${dd}`);
+  };
+
+  const getFormattedSelectedWeek = () => {
+    const [year, month, day] = selectedWeek.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-xl font-bold text-slate-800">Agenda da Oficina</h2>
-        <Button onClick={() => setShowAdd(true)}><Plus size={20} /> Agendar</Button>
+        
+        <div className="flex items-center gap-4">
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1">
+            <button onClick={() => changeWeek(-1)} className="p-1 text-slate-500 hover:bg-slate-100 rounded"><ChevronRight className="rotate-180" size={20} /></button>
+            <span className="px-4 font-medium text-sm text-slate-700">Semana de {getFormattedSelectedWeek()}</span>
+            <button onClick={() => changeWeek(1)} className="p-1 text-slate-500 hover:bg-slate-100 rounded"><ChevronRight size={20} /></button>
+          </div>
+          <Button onClick={() => setShowAdd(true)}><Plus size={20} /> <span className="hidden sm:inline">Agendar</span></Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {DAYS_OF_WEEK.map(day => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {DAYS_OF_WEEK.map((day, index) => {
+          if (day === 'Domingo' || day === 'Sábado') return null;
+          return (
           <Card key={day} className="flex flex-col min-h-[200px]">
             <div className="p-3 bg-slate-50 border-bottom border-slate-200 flex items-center justify-between">
-              <span className="font-bold text-slate-700">{day}</span>
+              <span className="font-bold text-slate-700">{day} <span className="text-xs text-slate-400 font-normal">({getDayDate(index)})</span></span>
               <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">{grouped[day].length}</span>
             </div>
             <div className="p-3 space-y-2 flex-1">
@@ -771,7 +865,7 @@ const Agenda = ({ agenda, vehicles, onAdd, onMove, onComplete, onDelete }: any) 
                       value={day}
                       onChange={(e) => onMove(item.id, e.target.value)}
                     >
-                      {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}</option>)}
+                      {DAYS_OF_WEEK.filter(d => d !== 'Domingo' && d !== 'Sábado').map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   )}
                 </div>
@@ -783,7 +877,8 @@ const Agenda = ({ agenda, vehicles, onAdd, onMove, onComplete, onDelete }: any) 
               )}
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       <AnimatePresence>
@@ -801,7 +896,7 @@ const Agenda = ({ agenda, vehicles, onAdd, onMove, onComplete, onDelete }: any) 
                   label="Dia da Semana" 
                   value={newEntry.day} 
                   onChange={(e: any) => setNewEntry({...newEntry, day: e.target.value})}
-                  options={DAYS_OF_WEEK.map(d => ({ label: d, value: d }))}
+                  options={DAYS_OF_WEEK.filter(d => d !== 'Domingo' && d !== 'Sábado').map(d => ({ label: d, value: d }))}
                 />
                 <Select 
                   label="Veículo" 
@@ -926,7 +1021,10 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
 
     return {
       vehicle_id: '',
-      date: new Date().toISOString().split('T')[0],
+      date: (() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      })(),
       start_time: '',
       end_time: '',
       type: 'Preventiva' as 'Preventiva' | 'Corretiva' | 'Preditiva',
@@ -1049,6 +1147,8 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
     normalize(s).includes(normalize(searchTerm))
   );
 
+  const selectedVehicle = vehicles.find((v: any) => v.id === parseInt(formData.vehicle_id));
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
@@ -1096,7 +1196,7 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
           ]}
           required
         />
-        <Input label="Quilometragem" type="number" value={formData.km} onChange={(e: any) => setFormData({...formData, km: parseInt(e.target.value)})} required />
+        <Input label={selectedVehicle?.measurement_type === 'hour_meter' ? 'Horímetro (h)' : 'Odômetro (km)'} type="number" value={formData.km} onChange={(e: any) => setFormData({...formData, km: parseInt(e.target.value)})} required />
       </div>
 
       <div className="space-y-2">
@@ -1270,7 +1370,7 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
                 <p>Deseja confirmar o registro da manutenção para o veículo <span className="font-bold text-slate-800">{vehicles.find((v: any) => v.id.toString() === formData.vehicle_id.toString())?.plate}</span>?</p>
                 <div className="bg-slate-50 p-3 rounded-xl text-sm space-y-2">
                   <p>• <span className="font-medium">Tipo:</span> {formData.type}</p>
-                  <p>• <span className="font-medium">Data:</span> {new Date(formData.date).toLocaleDateString('pt-BR')}</p>
+                  <p>• <span className="font-medium">Data:</span> {formatLocalDate(formData.date)}</p>
                   <p>• <span className="font-medium">Horário:</span> {formData.start_time || '--:--'} às {formData.end_time || '--:--'}</p>
                   
                   <div>
@@ -1310,19 +1410,27 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
 };
 
 const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: MaintenanceInterval[], onSaveInterval: (data: any) => void, onDeleteInterval: (id: number) => void }) => {
-  const [newInterval, setNewInterval] = useState({ service_type: 'Geral', interval_km: 10000 });
+  const [activeType, setActiveType] = useState<'odometer' | 'hour_meter'>('odometer');
+  const [newInterval, setNewInterval] = useState({ service_type: 'Geral', interval_km: 10000, measurement_type: 'odometer' as 'odometer' | 'hour_meter' });
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  useEffect(() => {
+    setNewInterval(prev => ({ ...prev, measurement_type: activeType }));
+  }, [activeType]);
+
   const handleEdit = (i: MaintenanceInterval) => {
-    setNewInterval({ service_type: i.service_type, interval_km: i.interval_km });
+    setNewInterval({ service_type: i.service_type, interval_km: i.interval_km, measurement_type: i.measurement_type });
+    setActiveType(i.measurement_type);
     setEditingId(i.id);
   };
 
   const handleSubmit = () => {
     onSaveInterval({ ...newInterval, id: editingId });
-    setNewInterval({ service_type: 'Geral', interval_km: 10000 });
+    setNewInterval({ service_type: 'Geral', interval_km: activeType === 'odometer' ? 10000 : 250, measurement_type: activeType });
     setEditingId(null);
   };
+
+  const filteredIntervals = intervals.filter(i => i.measurement_type === activeType || (!i.measurement_type && activeType === 'odometer'));
 
   return (
     <div className="space-y-6">
@@ -1331,8 +1439,25 @@ const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: 
         Configurações do Sistema
       </h2>
 
+      <div className="flex gap-2 p-1 bg-slate-100 rounded-xl w-fit">
+        <button 
+          onClick={() => setActiveType('odometer')}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeType === 'odometer' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Intervalos em KM
+        </button>
+        <button 
+          onClick={() => setActiveType('hour_meter')}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeType === 'hour_meter' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Intervalos em Horas
+        </button>
+      </div>
+
       <Card className="p-6">
-        <h3 className="font-bold text-slate-700 mb-4">{editingId ? 'Editar Intervalo' : 'Intervalos de Manutenção Preventiva'}</h3>
+        <h3 className="font-bold text-slate-700 mb-4">
+          {editingId ? 'Editar Intervalo' : `Definir Intervalos (${activeType === 'odometer' ? 'KM' : 'Horas'})`}
+        </h3>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <Select 
@@ -1345,17 +1470,17 @@ const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: 
               ]}
             />
             <Input 
-              label="Intervalo (km)" 
+              label={`Intervalo (${activeType === 'odometer' ? 'km' : 'h'})`} 
               type="number" 
               value={newInterval.interval_km} 
               onChange={(e: any) => setNewInterval({...newInterval, interval_km: parseInt(e.target.value)})} 
             />
             <div className="flex gap-2">
               <Button onClick={handleSubmit} className="flex-1">
-                <Save size={20} /> {editingId ? 'Salvar' : 'Atualizar'}
+                <Save size={20} /> {editingId ? 'Salvar' : 'Adicionar'}
               </Button>
               {editingId && (
-                <Button variant="secondary" onClick={() => { setEditingId(null); setNewInterval({ service_type: 'Geral', interval_km: 10000 }); }}>
+                <Button variant="secondary" onClick={() => { setEditingId(null); setNewInterval({ service_type: 'Geral', interval_km: activeType === 'odometer' ? 10000 : 250, measurement_type: activeType }); }}>
                   Cancelar
                 </Button>
               )}
@@ -1363,24 +1488,34 @@ const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: 
           </div>
 
           <div className="mt-6">
-            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Intervalos Definidos</h4>
+            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">
+              Intervalos Definidos ({activeType === 'odometer' ? 'KM' : 'Horas'})
+            </h4>
             <div className="grid gap-2">
-              {intervals.map(i => (
-                <div key={i.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <span className="font-medium text-slate-700">{i.service_type}</span>
-                  <div className="flex items-center gap-4">
-                    <span className="font-mono font-bold text-red-600">{i.interval_km.toLocaleString()} km</span>
-                    <div className="flex gap-1">
-                      <button onClick={() => handleEdit(i)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <Edit size={16} />
-                      </button>
-                      <button onClick={() => onDeleteInterval(i.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 size={16} />
-                      </button>
+              {filteredIntervals.length === 0 ? (
+                <p className="text-sm text-slate-400 italic p-4 text-center bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                  Nenhum intervalo definido para esta categoria.
+                </p>
+              ) : (
+                filteredIntervals.map(i => (
+                  <div key={i.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <span className="font-medium text-slate-700">{i.service_type}</span>
+                    <div className="flex items-center gap-4">
+                      <span className="font-mono font-bold text-red-600">
+                        {i.interval_km.toLocaleString()} {activeType === 'odometer' ? 'km' : 'h'}
+                      </span>
+                      <div className="flex gap-1">
+                        <button onClick={() => handleEdit(i)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                          <Edit size={16} />
+                        </button>
+                        <button onClick={() => onDeleteInterval(i.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1710,9 +1845,9 @@ const Reports = ({ vehicles }: { vehicles: Vehicle[] }) => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={durationTrend} onClick={(data: any) => data && data.activePayload && toggleCrossFilter('date', data.activePayload[0].payload.date)}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" fontSize={10} tickFormatter={(val) => new Date(val).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} />
+                <XAxis dataKey="date" fontSize={10} tickFormatter={(val) => formatLocalDateShort(val)} />
                 <YAxis fontSize={10} />
-                <Tooltip labelFormatter={(val) => new Date(val).toLocaleDateString('pt-BR')} />
+                <Tooltip labelFormatter={(val) => formatLocalDate(val)} />
                 <Line 
                   type="monotone" 
                   dataKey="duration" 
@@ -1826,7 +1961,7 @@ const Reports = ({ vehicles }: { vehicles: Vehicle[] }) => {
                 const services = JSON.parse(m.services || '[]');
                 return (
                   <tr key={m.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{new Date(m.date).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{formatLocalDate(m.date)}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-slate-800">{m.vehicle_plate}</span>
@@ -1853,7 +1988,9 @@ const Reports = ({ vehicles }: { vehicles: Vehicle[] }) => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-mono text-slate-600">{getDuration(m.start_time, m.end_time).toFixed(1)}h</td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{m.km.toLocaleString()} km</td>
+                    <td className="px-6 py-4 text-sm text-slate-600">
+                      {m.km.toLocaleString()} {vehicles.find((v: any) => v.id === m.vehicle_id)?.measurement_type === 'hour_meter' ? 'h' : 'km'}
+                    </td>
                   </tr>
                 );
               })}
@@ -1870,7 +2007,7 @@ const Reports = ({ vehicles }: { vehicles: Vehicle[] }) => {
   );
 };
 
-const VehicleHistory = ({ vehicle, maintenances, onBack, onEditMaintenance, onEditVehicle }: any) => {
+const VehicleHistory = ({ vehicle, maintenances, onBack, onEditMaintenance, onDeleteMaintenance, onEditVehicle, userRole }: any) => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -1878,10 +2015,12 @@ const VehicleHistory = ({ vehicle, maintenances, onBack, onEditMaintenance, onEd
           <Button variant="ghost" onClick={onBack} className="p-2"><ChevronRight size={24} className="rotate-180" /></Button>
           <h2 className="text-xl font-bold text-slate-800">Histórico do Veículo</h2>
         </div>
-        <Button variant="secondary" onClick={() => onEditVehicle(vehicle)} className="h-10">
-          <SettingsIcon size={18} />
-          <span className="hidden sm:inline">Configurações</span>
-        </Button>
+        {userRole === 'admin' && (
+          <Button variant="secondary" onClick={() => onEditVehicle(vehicle)} className="h-10">
+            <SettingsIcon size={18} />
+            <span className="hidden sm:inline">Configurações</span>
+          </Button>
+        )}
       </div>
 
       <Card className="p-6 bg-red-600 text-white border-none shadow-red-200 shadow-xl">
@@ -1897,8 +2036,8 @@ const VehicleHistory = ({ vehicle, maintenances, onBack, onEditMaintenance, onEd
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-red-200 text-[10px] font-bold uppercase">Km Atual</p>
-            <p className="text-lg font-mono">{vehicle.km_current.toLocaleString()} km</p>
+            <p className="text-red-200 text-[10px] font-bold uppercase">{vehicle.measurement_type === 'hour_meter' ? 'Horas Atuais' : 'Km Atual'}</p>
+            <p className="text-lg font-mono">{vehicle.km_current.toLocaleString()} {vehicle.measurement_type === 'hour_meter' ? 'h' : 'km'}</p>
           </div>
           <div className="text-right">
             <p className="text-red-200 text-[10px] font-bold uppercase">Investimento Total</p>
@@ -1921,17 +2060,31 @@ const VehicleHistory = ({ vehicle, maintenances, onBack, onEditMaintenance, onEd
                 <Card key={m.id} className="p-4">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <p className="text-sm font-bold text-slate-800">{new Date(m.date).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-sm font-bold text-slate-800">{formatLocalDate(m.date)}</p>
                       <p className="text-xs text-slate-500 flex items-center gap-1"><User size={12} /> {m.mechanic}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">{m.km.toLocaleString()} km</span>
-                      <button 
-                        onClick={() => onEditMaintenance(m)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Edit size={16} />
-                      </button>
+                      <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">
+                        {m.km.toLocaleString()} {vehicle.measurement_type === 'hour_meter' ? 'h' : 'km'}
+                      </span>
+                      {userRole === 'admin' && (
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => onEditMaintenance(m)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Editar"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button 
+                            onClick={() => onDeleteMaintenance(m)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -1976,10 +2129,22 @@ const VehicleHistory = ({ vehicle, maintenances, onBack, onEditMaintenance, onEd
   );
 };
 
+const formatLocalDate = (dateString: string) => {
+  if (!dateString) return '';
+  const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
+};
+
+const formatLocalDateShort = (dateString: string) => {
+  if (!dateString) return '';
+  const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+};
+
 // --- Main App ---
 
 export default function App() {
-  const [user, setUser] = useState<{ role: 'admin' | 'mechanic' } | null>(null);
+  const [user, setUser] = useState<{ role: 'admin' | 'mechanic', username: string } | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [agenda, setAgenda] = useState<AgendaItem[]>([]);
@@ -1993,17 +2158,32 @@ export default function App() {
   const [allMaintenances, setAllMaintenances] = useState<any[]>([]);
   const [updatingKMVehicle, setUpdatingKMVehicle] = useState<Vehicle | null>(null);
   const [newKM, setNewKM] = useState<number>(0);
+  const [maintenanceSearch, setMaintenanceSearch] = useState('');
+  const [reportIssues, setReportIssues] = useState<any[]>([]);
+  const [reportForm, setReportForm] = useState({ maintenance_id: '', description: '' });
+  const [confirmReport, setConfirmReport] = useState<any>(null);
+  const [selectedWeek, setSelectedWeek] = useState(() => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day; // Sunday is 0, so subtract day to get Sunday
+    const sunday = new Date(d.getFullYear(), d.getMonth(), diff);
+    const y = sunday.getFullYear();
+    const m = String(sunday.getMonth() + 1).padStart(2, '0');
+    const dd = String(sunday.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  });
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     try {
-      const [vData, aData, sData, iData, mData, allMData] = await Promise.all([
+      const [vData, aData, sData, iData, mData, allMData, rData] = await Promise.all([
         supabaseService.getVehicles(),
-        supabaseService.getAgenda(),
+        supabaseService.getAgenda(selectedWeek),
         supabaseService.getStats(),
         supabaseService.getIntervals(),
         supabaseService.getMechanics(),
-        supabaseService.getMaintenances()
+        supabaseService.getMaintenances(),
+        supabaseService.getReportIssues()
       ]);
       setVehicles(vData);
       setAgenda(aData);
@@ -2011,6 +2191,7 @@ export default function App() {
       setIntervals(iData);
       setMechanics(mData);
       setAllMaintenances(allMData);
+      setReportIssues(rData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -2040,7 +2221,7 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedWeek]);
 
   const handleSaveVehicle = async (data: any) => {
     const payload = editingVehicle?.id ? { ...data, id: editingVehicle.id } : data;
@@ -2051,6 +2232,7 @@ export default function App() {
   };
 
   const [deletingVehicle, setDeletingVehicle] = useState<Vehicle | null>(null);
+  const [deletingMaintenance, setDeletingMaintenance] = useState<any | null>(null);
 
   const confirmDeleteVehicle = async () => {
     if (!deletingVehicle) return;
@@ -2063,6 +2245,19 @@ export default function App() {
     } catch (error) {
       console.error(error);
       alert('Erro ao excluir veículo. Tente novamente.');
+    }
+  };
+
+  const confirmDeleteMaintenance = async () => {
+    if (!deletingMaintenance) return;
+
+    try {
+      await supabaseService.deleteMaintenance(deletingMaintenance.id);
+      setDeletingMaintenance(null);
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao excluir manutenção. Tente novamente.');
     }
   };
 
@@ -2104,12 +2299,31 @@ export default function App() {
   };
 
   const handleAgendaAdd = async (entry: any) => {
-    await supabaseService.saveAgenda({ day_of_week: entry.day, vehicle_id: entry.vehicleId });
+    await supabaseService.saveAgenda({ day_of_week: entry.day, vehicle_id: entry.vehicleId, week_start_date: selectedWeek });
     fetchData();
   };
 
-  const handleLogin = (role: 'admin' | 'mechanic') => {
-    setUser({ role });
+  const handleReportSubmit = async () => {
+    if (!confirmReport || !reportForm.description) return;
+    await supabaseService.saveReportIssue({
+      maintenance_id: confirmReport.id,
+      mechanic_name: user?.username || 'Mecânico',
+      description: reportForm.description,
+      status: 'pendente'
+    });
+    setReportForm({ maintenance_id: '', description: '' });
+    setConfirmReport(null);
+    alert('Reportagem enviada com sucesso!');
+    fetchData();
+  };
+
+  const handleReportStatusChange = async (id: number, status: 'pendente' | 'resolvida') => {
+    await supabaseService.updateReportIssueStatus(id, status);
+    fetchData();
+  };
+
+  const handleLogin = (role: 'admin' | 'mechanic', username: string) => {
+    setUser({ role, username });
     setActiveTab('dashboard');
   };
 
@@ -2147,12 +2361,14 @@ export default function App() {
     { id: 'maintenances', label: 'Histórico', icon: History },
     { id: 'mechanics', label: 'Mecânicos', icon: Wrench },
     { id: 'reports', label: 'Relatórios', icon: BarChart3 },
+    { id: 'report_issue', label: 'Reportar', icon: AlertTriangle },
+    { id: 'admin_reports', label: 'Reportagens', icon: AlertTriangle },
     { id: 'settings', label: 'Configurações', icon: SettingsIcon },
   ];
 
   const availableTabs = user.role === 'mechanic' 
-    ? allTabs.filter(t => ['dashboard', 'agenda', 'register'].includes(t.id))
-    : allTabs;
+    ? allTabs.filter(t => ['dashboard', 'vehicles', 'agenda', 'register', 'maintenances', 'report_issue'].includes(t.id))
+    : allTabs.filter(t => t.id !== 'report_issue');
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-6 md:pl-64">
@@ -2257,6 +2473,7 @@ export default function App() {
                     setNewKM(v.km_current);
                   }}
                   onDelete={handleDeleteVehicle}
+                  userRole={user.role}
                 />
               )
             )}
@@ -2269,6 +2486,8 @@ export default function App() {
                 onMove={handleAgendaMove}
                 onComplete={handleAgendaComplete}
                 onDelete={handleAgendaDelete}
+                selectedWeek={selectedWeek}
+                setSelectedWeek={setSelectedWeek}
               />
             )}
 
@@ -2284,32 +2503,63 @@ export default function App() {
 
             {activeTab === 'maintenances' && (
               <div className="space-y-6">
-                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                  <History size={24} />
-                  Histórico Geral de Manutenções
-                </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <History size={24} />
+                    Histórico Geral de Manutenções
+                  </h2>
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Buscar por número (#)" 
+                      value={maintenanceSearch}
+                      onChange={(e) => setMaintenanceSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-4">
-                  {allMaintenances.map((m: any) => {
+                  {allMaintenances
+                    .filter(m => maintenanceSearch ? m.id.toString().includes(maintenanceSearch.replace('#', '')) : true)
+                    .map((m: any) => {
                     const services = JSON.parse(m.services || '[]');
+                    const v = vehicles.find(v => v.id === m.vehicle_id);
+                    const isHourMeter = v?.measurement_type === 'hour_meter';
                     return (
                       <Card key={m.id} className="p-4">
                         <div className="flex justify-between items-start mb-3">
                           <div>
                             <div className="flex items-center gap-2 mb-1">
+                              <span className="font-mono font-bold text-slate-500 text-sm">#{m.id}</span>
                               <span className="font-black text-red-600">{m.vehicle_plate}</span>
                               <span className="text-xs text-slate-400">• {m.vehicle_type}</span>
                             </div>
-                            <p className="text-sm font-bold text-slate-800">{new Date(m.date).toLocaleDateString('pt-BR')}</p>
+                            <p className="text-sm font-bold text-slate-800">{formatLocalDate(m.date)}</p>
                             <p className="text-xs text-slate-500 flex items-center gap-1"><User size={12} /> {m.mechanic}</p>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">{m.km.toLocaleString()} km</span>
-                            <button 
-                              onClick={() => { setEditingMaintenance(m); setActiveTab('register'); }}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <Edit size={16} />
-                            </button>
+                            <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">
+                              {m.km.toLocaleString()} {isHourMeter ? 'h' : 'km'}
+                            </span>
+                            {user.role === 'admin' && (
+                              <>
+                                <button 
+                                  onClick={() => { setEditingMaintenance(m); setActiveTab('register'); }}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Editar"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button 
+                                  onClick={() => setDeletingMaintenance(m)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Apagar"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1">
@@ -2322,6 +2572,124 @@ export default function App() {
                       </Card>
                     );
                   })}
+                  {allMaintenances.filter(m => maintenanceSearch ? m.id.toString().includes(maintenanceSearch.replace('#', '')) : true).length === 0 && (
+                    <div className="text-center py-8 text-slate-500">
+                      Nenhuma manutenção encontrada.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'report_issue' && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <AlertTriangle size={24} />
+                  Reportar Erro em Manutenção
+                </h2>
+                <Card className="p-6 max-w-2xl">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Número da Manutenção (#)</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                          placeholder="Ex: 123"
+                          value={reportForm.maintenance_id}
+                          onChange={(e) => setReportForm({...reportForm, maintenance_id: e.target.value.replace(/\D/g, '')})}
+                        />
+                        <Button 
+                          onClick={() => {
+                            const m = allMaintenances.find(m => m.id.toString() === reportForm.maintenance_id);
+                            if (m) {
+                              setConfirmReport(m);
+                            } else {
+                              alert('Manutenção não encontrada.');
+                            }
+                          }}
+                        >
+                          Buscar
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {confirmReport && (
+                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <p className="font-bold text-slate-800 mb-2">Confirmar Manutenção:</p>
+                        <p className="text-sm text-slate-600">Veículo: {confirmReport.vehicle_plate} ({confirmReport.vehicle_type})</p>
+                        <p className="text-sm text-slate-600">Data: {formatLocalDate(confirmReport.date)}</p>
+                        <p className="text-sm text-slate-600">Mecânico: {confirmReport.mechanic}</p>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Descrição do Erro</label>
+                      <textarea 
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none min-h-[100px]"
+                        placeholder="Descreva o que foi preenchido incorretamente..."
+                        value={reportForm.description}
+                        onChange={(e) => setReportForm({...reportForm, description: e.target.value})}
+                      />
+                    </div>
+
+                    <Button 
+                      className="w-full" 
+                      disabled={!confirmReport || !reportForm.description}
+                      onClick={handleReportSubmit}
+                    >
+                      Enviar Reportagem
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {activeTab === 'admin_reports' && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <AlertTriangle size={24} />
+                  Reportagens de Erros
+                </h2>
+                <div className="space-y-4">
+                  {reportIssues.map((report: any) => {
+                    const m = allMaintenances.find(m => m.id === report.maintenance_id);
+                    return (
+                      <Card key={report.id} className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-slate-800">Manutenção #{report.maintenance_id}</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${report.status === 'resolvida' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {report.status.toUpperCase()}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 flex items-center gap-1"><User size={12} /> Reportado por: {report.mechanic_name}</p>
+                            <p className="text-xs text-slate-500 flex items-center gap-1"><Clock size={12} /> {new Date(report.created_at).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          {report.status === 'pendente' && (
+                            <Button className="px-3 py-1 text-sm" onClick={() => handleReportStatusChange(report.id, 'resolvida')}>
+                              Marcar como Resolvida
+                            </Button>
+                          )}
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded border border-slate-100 text-sm text-slate-700">
+                          <p className="font-medium mb-1">Descrição do erro:</p>
+                          <p>{report.description}</p>
+                        </div>
+                        {m && (
+                          <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+                            Detalhes originais: {m.vehicle_plate} • {formatLocalDate(m.date)} • {m.mechanic}
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })}
+                  {reportIssues.length === 0 && (
+                    <div className="text-center py-8 text-slate-500">
+                      Nenhuma reportagem encontrada.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2340,7 +2708,12 @@ export default function App() {
                 maintenances={vehicleHistory} 
                 onBack={() => setActiveTab('vehicles')} 
                 onEditMaintenance={(m: any) => { setEditingMaintenance(m); setActiveTab('register'); }}
+                onDeleteMaintenance={(m: any) => {
+                  const v = vehicles.find(veh => veh.id === m.vehicle_id);
+                  setDeletingMaintenance({ ...m, vehicle_plate: v?.plate || 'Desconhecido' });
+                }}
                 onEditVehicle={(v: any) => { setEditingVehicle(v); setActiveTab('vehicles'); }}
+                userRole={user.role}
               />
             )}
 
@@ -2358,6 +2731,39 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* Delete Maintenance Confirmation Modal */}
+      {deletingMaintenance && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+          >
+            <div className="p-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 mb-4 mx-auto">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 text-center mb-2">Excluir Manutenção</h3>
+              <p className="text-slate-500 text-center mb-6">
+                Tem certeza que deseja excluir a manutenção <strong>#{deletingMaintenance.id}</strong> do veículo <strong>{deletingMaintenance.vehicle_plate}</strong>? 
+                Esta ação não pode ser desfeita.
+              </p>
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={() => setDeletingMaintenance(null)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={confirmDeleteMaintenance} 
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Excluir
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deletingVehicle && (
@@ -2403,7 +2809,7 @@ export default function App() {
               className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-slate-800">Atualizar KM - {updatingKMVehicle.plate}</h3>
+                <h3 className="font-bold text-slate-800">Atualizar {updatingKMVehicle.measurement_type === 'hour_meter' ? 'Horas' : 'KM'} - {updatingKMVehicle.plate}</h3>
                 <button onClick={() => setUpdatingKMVehicle(null)} className="text-slate-400 hover:text-slate-600">
                   <X size={20} />
                 </button>
@@ -2411,10 +2817,14 @@ export default function App() {
               
               <div className="space-y-4">
                 <Input 
-                  label="Nova Quilometragem" 
-                  type="number" 
+                  label={updatingKMVehicle.measurement_type === 'hour_meter' ? 'Novas Horas' : 'Nova Quilometragem'} 
+                  type="text" 
                   value={newKM} 
-                  onChange={(e: any) => setNewKM(parseInt(e.target.value) || 0)}
+                  onChange={(e: any) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    const maxLen = updatingKMVehicle.measurement_type === 'hour_meter' ? 12 : 10;
+                    setNewKM(val.slice(0, maxLen));
+                  }}
                   autoFocus
                 />
                 

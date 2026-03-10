@@ -9,21 +9,25 @@ export interface User {
 }
 
 export interface Vehicle {
-  id: string;
-  type: 'Carreta' | 'Pipa' | 'Traçado';
+  id: number;
+  type: 'Carreta' | 'Pipa20' | 'Pipa10' | 'Traçado';
   plate: string;
   km_current: number;
+  measurement_type?: 'odometer' | 'hour_meter';
   status: 'Rodando' | 'Em manutenção' | 'Parado';
   last_maintenance_km: number;
   is_contracted?: boolean;
   contract_company?: string;
+  contract_work?: string;
+  contract_start_date?: string;
   contract_closing_day?: number;
   contract_value?: number;
+  contract_observation?: string;
 }
 
 export interface Maintenance {
-  id: string;
-  vehicle_id: string;
+  id: number;
+  vehicle_id: number;
   vehicle_plate?: string;
   vehicle_type?: string;
   date: string;
@@ -32,16 +36,17 @@ export interface Maintenance {
   type: 'Preventiva' | 'Corretiva' | 'Preditiva';
   km: number;
   mechanic: string;
-  services: any[]; // Array of objects or strings
+  services: string; // JSON string in DB
   other_services: string;
   observations: string;
   cost: number;
 }
 
 export interface MaintenanceInterval {
-  id: string;
+  id: number;
   service_type: string;
   interval_km: number;
+  measurement_type: 'odometer' | 'hour_meter';
 }
 
 export interface ReportData {
@@ -52,17 +57,22 @@ export interface ReportData {
 }
 
 export interface AgendaItem {
-  id: string;
+  id: number;
   day_of_week: string;
-  vehicle_id: string;
+  week_start_date?: string;
+  vehicle_id: number;
   vehicle_plate: string;
   vehicle_type: string;
   status: 'Pendente' | 'Concluído';
 }
 
-export interface Mechanic {
-  id: string;
-  name: string;
+export interface ReportIssue {
+  id: number;
+  maintenance_id: number;
+  mechanic_name: string;
+  description: string;
+  status: 'pendente' | 'resolvida';
+  created_at: string;
 }
 
 export const MAINTENANCE_TYPES = [
@@ -82,4 +92,4 @@ export const MAINTENANCE_TYPES = [
   "Socorro caminhão pipa", "Socorro caminhão báscula", "Socorro carreta", "Socorro máquina"
 ];
 
-export const DAYS_OF_WEEK = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+export const DAYS_OF_WEEK = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];

@@ -14,11 +14,12 @@ export const supabaseService = {
   },
 
   saveVehicle: async (vehicle: any) => {
-    if (vehicle.id) {
+    const { id, ...payload } = vehicle;
+    if (id) {
       const { data, error } = await getSupabase()
         .from('vehicles')
-        .update(vehicle)
-        .eq('id', vehicle.id)
+        .update(payload)
+        .eq('id', id)
         .select()
         .single();
       if (error) throw error;
@@ -26,7 +27,7 @@ export const supabaseService = {
     } else {
       const { data, error } = await getSupabase()
         .from('vehicles')
-        .insert([vehicle])
+        .insert([payload])
         .select()
         .single();
       if (error) throw error;
@@ -70,17 +71,17 @@ export const supabaseService = {
   },
 
   saveMaintenance: async (maintenance: any) => {
-    const { services, ...rest } = maintenance;
+    const { id, services, vehicle_plate, vehicle_type, vehicles, ...rest } = maintenance;
     const payload = {
       ...rest,
       services: typeof services === 'string' ? services : JSON.stringify(services)
     };
 
-    if (maintenance.id) {
+    if (id) {
       const { data, error } = await getSupabase()
         .from('maintenances')
         .update(payload)
-        .eq('id', maintenance.id)
+        .eq('id', id)
         .select()
         .single();
       if (error) throw error;
@@ -125,10 +126,16 @@ export const supabaseService = {
   },
 
   // Agenda
-  getAgenda: async (): Promise<AgendaItem[]> => {
-    const { data, error } = await getSupabase()
+  getAgenda: async (weekStartDate?: string): Promise<AgendaItem[]> => {
+    let query = getSupabase()
       .from('agenda')
       .select('*, vehicles(plate, type)');
+    
+    if (weekStartDate) {
+      query = query.eq('week_start_date', weekStartDate);
+    }
+    
+    const { data, error } = await query;
     
     if (error) throw error;
     
@@ -140,11 +147,12 @@ export const supabaseService = {
   },
 
   saveAgenda: async (item: any) => {
-    if (item.id) {
+    const { id, vehicle_plate, vehicle_type, vehicles, ...payload } = item;
+    if (id) {
       const { data, error } = await getSupabase()
         .from('agenda')
-        .update(item)
-        .eq('id', item.id)
+        .update(payload)
+        .eq('id', id)
         .select()
         .single();
       if (error) throw error;
@@ -152,7 +160,7 @@ export const supabaseService = {
     } else {
       const { data, error } = await getSupabase()
         .from('agenda')
-        .insert([item])
+        .insert([payload])
         .select()
         .single();
       if (error) throw error;
@@ -175,11 +183,12 @@ export const supabaseService = {
   },
 
   saveInterval: async (interval: any) => {
-    if (interval.id) {
+    const { id, ...payload } = interval;
+    if (id) {
       const { data, error } = await getSupabase()
         .from('maintenance_intervals')
-        .update(interval)
-        .eq('id', interval.id)
+        .update(payload)
+        .eq('id', id)
         .select()
         .single();
       if (error) throw error;
@@ -187,7 +196,7 @@ export const supabaseService = {
     } else {
       const { data, error } = await getSupabase()
         .from('maintenance_intervals')
-        .insert([interval])
+        .insert([payload])
         .select()
         .single();
       if (error) throw error;
@@ -236,13 +245,20 @@ export const supabaseService = {
     if (error) throw error;
   },
 
+  deleteMaintenance: async (id: number) => {
+    const { error } = await getSupabase().from('maintenances').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   // Stats
   getStats: async () => {
     const { data: vehicles } = await getSupabase().from('vehicles').select('status');
+    const d = new Date();
+    const firstDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
     const { count: maintenancesThisMonth } = await getSupabase()
       .from('maintenances')
       .select('*', { count: 'exact', head: true })
-      .gte('date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+      .gte('date', firstDay);
 
     const totalVehicles = vehicles?.length || 0;
     const inMaintenance = vehicles?.filter(v => v.status === 'Em manutenção').length || 0;
@@ -256,12 +272,44 @@ export const supabaseService = {
     };
   },
 
+  // Report Issues
+  getReportIssues: async () => {
+    const { data, error } = await getSupabase()
+      .from('report_issues')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  saveReportIssue: async (issue: any) => {
+    const { id, ...payload } = issue;
+    const { data, error } = await getSupabase()
+      .from('report_issues')
+      .insert([payload])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  updateReportIssueStatus: async (id: number, status: 'pendente' | 'resolvida') => {
+    const { data, error } = await getSupabase()
+      .from('report_issues')
+      .update({ status })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   // Auth
   login: async (username: string, password: string): Promise<'admin' | 'mechanic' | null> => {
     const { data, error } = await getSupabase()
       .from('app_users')
       .select('role')
-      .eq('username', username)
+      .ilike('username', username)
       .eq('password', password)
       .single();
     
