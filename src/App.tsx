@@ -260,7 +260,12 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
           return services.some((s: any) => (typeof s === 'object' ? s.name : s) === interval.service_type);
         });
 
-        const lastKM = lastService ? lastService.km : (v.last_maintenance_km || 0);
+        // Alternativa 1: Se não houver histórico deste serviço para este veículo, não gera alerta.
+        if (!lastService) {
+          return null;
+        }
+
+        const lastKM = lastService.km;
         const kmSinceLast = (v.km_current || 0) - lastKM;
         const remaining = interval.interval_km - kmSinceLast;
         const threshold = interval.interval_km * 0.1;
