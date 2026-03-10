@@ -2149,7 +2149,10 @@ const formatLocalDateShort = (dateString: string) => {
 // --- Main App ---
 
 export default function App() {
-  const [user, setUser] = useState<{ role: 'admin' | 'mechanic', username: string } | null>(null);
+  const [user, setUser] = useState<{ role: 'admin' | 'mechanic', username: string } | null>(() => {
+    const savedUser = localStorage.getItem('frotas_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [activeTab, setActiveTab] = useState('dashboard');
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [agenda, setAgenda] = useState<AgendaItem[]>([]);
@@ -2328,12 +2331,15 @@ export default function App() {
   };
 
   const handleLogin = (role: 'admin' | 'mechanic', username: string) => {
-    setUser({ role, username });
+    const newUser = { role, username };
+    setUser(newUser);
+    localStorage.setItem('frotas_user', JSON.stringify(newUser));
     setActiveTab('dashboard');
   };
 
   const handleLogout = () => {
     setUser(null);
+    localStorage.removeItem('frotas_user');
     setActiveTab('dashboard');
   };
 
