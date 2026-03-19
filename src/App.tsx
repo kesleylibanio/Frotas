@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Login } from './components/Login';
+import { SearchableSelect } from './components/SearchableSelect';
 import { 
   BarChart, 
   Bar, 
@@ -1162,16 +1163,15 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Select 
+        <SearchableSelect 
           label="Veículo" 
           value={formData.vehicle_id} 
-          onChange={(e: any) => {
-            const v = vehicles.find((veh: any) => veh.id === parseInt(e.target.value));
-            setFormData({...formData, vehicle_id: e.target.value, km: v?.km_current || 0});
+          onChange={(val) => {
+            const v = vehicles.find((veh: any) => veh.id === parseInt(val as string));
+            setFormData({...formData, vehicle_id: val, km: v?.km_current || 0});
           }}
-          required
+          placeholder="Selecione o veículo..."
           options={[
-            { label: 'Selecione o veículo', value: '' },
             ...vehicles.map((v: any) => ({ label: v.plate, value: v.id }))
           ]}
         />
@@ -2146,10 +2146,174 @@ const formatLocalDateShort = (dateString: string) => {
   return new Date(year, month - 1, day).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 };
 
+const DriverRequests = ({ requests, role, username, onSubmit, onResolve, vehicles }: { requests: any[], role: string, username: string, onSubmit: (data: any) => void, onResolve: (id: number) => void, vehicles: any[] }) => {
+  const [plate, setPlate] = useState('');
+  const [description, setDescription] = useState('');
+  const [filter, setFilter] = useState<'todas' | 'resolvidas' | 'nao_resolvidas'>('todas');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!plate) {
+        alert('Por favor, selecione uma placa.');
+        return;
+    }
+    onSubmit({
+      driver_name: username,
+      vehicle_plate: plate,
+      description,
+      status: 'pendente'
+    });
+    setPlate('');
+    setDescription('');
+  };
+
+  const filteredRequests = requests.filter(req => {
+    if (role === 'mechanic') return req.status === 'pendente';
+    if (role === 'admin') {
+      if (filter === 'resolvidas') return req.status === 'resolvida';
+      if (filter === 'nao_resolvidas') return req.status === 'pendente';
+      return true;
+    }
+    // For motorista, show their own requests
+    return req.driver_name === username;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <Wrench size={24} className="text-red-600" />
+          Solicitações de Manutenção
+        </h2>
+        {role === 'admin' && (
+          <div className="flex gap-2">
+            <Button variant={filter === 'todas' ? 'primary' : 'secondary'} onClick={() => setFilter('todas')}>Todas</Button>
+            <Button variant={filter === 'nao_resolvidas' ? 'primary' : 'secondary'} onClick={() => setFilter('nao_resolvidas')}>Pendentes</Button>
+            <Button variant={filter === 'resolvidas' ? 'primary' : 'secondary'} onClick={() => setFilter('resolvidas')}>Resolvidas</Button>
+          </div>
+        )}
+      </div>
+
+      {role === 'motorista' && (
+        <Card className="p-6">
+          <h3 className="text-lg font-bold text-slate-800 mb-4">Nova Solicitação</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <SearchableSelect 
+                label="Placa do Caminhão"
+                options={vehicles.map(v => ({ label: v.plate, value: v.plate }))}
+                value={plate}
+                onChange={(val) => setPlate(val as string)}
+                placeholder="Selecione a placa..."
+              />
+              <Input 
+                label="Data" 
+                value={new Date().toLocaleDateString('pt-BR')} 
+                disabled 
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Motivo da Manutenção ({description.length}/500)
+              </label>
+              <textarea 
+                value={description}
+                onChange={(e) => {
+                  if (e.target.value.length <= 500) {
+                    setDescription(e.target.value);
+                  }
+                }}
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none transition-all min-h-[100px]"
+                required
+                maxLength={500}
+              />
+            </div>
+            <Button type="submit" className="w-full md:w-auto"><Plus size={20} /> Enviar Solicitação</Button>
+          </form>
+        </Card>
+      )}
+
+      <div className="grid gap-4">
+        {filteredRequests.map(req => (
+          <Card key={req.id} className={`p-4 border-l-4 shadow-sm rounded-xl ${req.status === 'resolvida' ? 'border-l-emerald-500' : 'border-l-amber-500'}`}>
+            <div className="flex justify-between items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-slate-800">{req.vehicle_plate}</span>
+                  <span className="text-sm text-slate-500">• {req.driver_name}</span>
+                  <span className="text-xs text-slate-400">• {new Date(req.created_at).toLocaleDateString('pt-BR')}</span>
+                  {role === 'admin' && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${req.status === 'resolvida' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {req.status === 'resolvida' ? 'Resolvido' : 'Pendente'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-slate-700 text-sm line-clamp-2">
+                  {req.description}
+                </p>
+                {req.description.length > 100 && (
+                  <button 
+                    onClick={() => {
+                      const overlay = document.createElement('div');
+                      overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4';
+                      
+                      const modal = document.createElement('div');
+                      modal.className = 'bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden';
+                      
+                      modal.innerHTML = `
+                        <div class="px-6 py-5 border-b border-slate-100 flex-shrink-0">
+                          <h3 class="text-xl font-bold text-slate-900">Solicitação de ${req.vehicle_plate}</h3>
+                        </div>
+                        <div class="px-6 py-6 overflow-y-auto flex-1 min-h-0">
+                          <p class="text-slate-700 whitespace-pre-wrap leading-relaxed text-base break-words">${req.description}</p>
+                        </div>
+                        <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex-shrink-0">
+                          <button class="w-full px-4 py-3 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800 transition-colors">Fechar</button>
+                        </div>
+                      `;
+                      
+                      overlay.appendChild(modal);
+                      document.body.appendChild(overlay);
+                      
+                      const close = () => {
+                        document.body.removeChild(overlay);
+                      };
+                      
+                      modal.querySelector('button')?.addEventListener('click', close);
+                      overlay.addEventListener('click', (e) => {
+                        if (e.target === overlay) close();
+                      });
+                    }}
+                    className="text-xs text-red-600 font-semibold hover:underline mt-1"
+                  >
+                    Ver mais
+                  </button>
+                )}
+              </div>
+              {role === 'mechanic' && req.status === 'pendente' && (
+                <div className="flex-shrink-0">
+                  <Button onClick={() => onResolve(req.id)} className="bg-emerald-600 hover:bg-emerald-700 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                    <CheckCircle2 size={20} />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Card>
+        ))}
+        {filteredRequests.length === 0 && (
+          <div className="text-center py-12 text-slate-400 italic bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+            Nenhuma solicitação encontrada.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
-  const [user, setUser] = useState<{ role: 'admin' | 'mechanic', username: string } | null>(() => {
+  const [user, setUser] = useState<{ role: 'admin' | 'mechanic' | 'motorista', username: string } | null>(() => {
     const savedUser = localStorage.getItem('frotas_user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
@@ -2168,6 +2332,7 @@ export default function App() {
   const [newKM, setNewKM] = useState<number>(0);
   const [maintenanceSearch, setMaintenanceSearch] = useState('');
   const [reportIssues, setReportIssues] = useState<any[]>([]);
+  const [driverRequests, setDriverRequests] = useState<any[]>([]);
   const [reportForm, setReportForm] = useState({ maintenance_id: '', description: '' });
   const [confirmReport, setConfirmReport] = useState<any>(null);
   const [selectedWeek, setSelectedWeek] = useState(() => {
@@ -2184,14 +2349,15 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      const [vData, aData, sData, iData, mData, allMData, rData] = await Promise.all([
+      const [vData, aData, sData, iData, mData, allMData, rData, dReqData] = await Promise.all([
         supabaseService.getVehicles(),
         supabaseService.getAgenda(selectedWeek),
         supabaseService.getStats(),
         supabaseService.getIntervals(),
         supabaseService.getMechanics(),
         supabaseService.getMaintenances(),
-        supabaseService.getReportIssues()
+        supabaseService.getReportIssues(),
+        supabaseService.getDriverRequests()
       ]);
       setVehicles(vData);
       setAgenda(aData);
@@ -2200,6 +2366,7 @@ export default function App() {
       setMechanics(mData);
       setAllMaintenances(allMData);
       setReportIssues(rData);
+      setDriverRequests(dReqData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -2330,11 +2497,22 @@ export default function App() {
     fetchData();
   };
 
-  const handleLogin = (role: 'admin' | 'mechanic', username: string) => {
+  const handleDriverRequestSubmit = async (data: any) => {
+    await supabaseService.saveDriverRequest(data);
+    alert('Solicitação enviada com sucesso!');
+    fetchData();
+  };
+
+  const handleDriverRequestResolve = async (id: number) => {
+    await supabaseService.updateDriverRequestStatus(id, 'resolvida');
+    fetchData();
+  };
+
+  const handleLogin = (role: 'admin' | 'mechanic' | 'motorista', username: string) => {
     const newUser = { role, username };
     setUser(newUser);
     localStorage.setItem('frotas_user', JSON.stringify(newUser));
-    setActiveTab('dashboard');
+    setActiveTab(role === 'motorista' ? 'driver_requests' : 'dashboard');
   };
 
   const handleLogout = () => {
@@ -2365,6 +2543,7 @@ export default function App() {
 
   const allTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'driver_requests', label: 'Solicitações', icon: Wrench },
     { id: 'vehicles', label: 'Veículos', icon: Truck },
     { id: 'contracts', label: 'Contratos', icon: FileText },
     { id: 'agenda', label: 'Agenda', icon: Calendar },
@@ -2378,7 +2557,9 @@ export default function App() {
   ];
 
   const availableTabs = user.role === 'mechanic' 
-    ? allTabs.filter(t => ['dashboard', 'vehicles', 'agenda', 'register', 'maintenances', 'report_issue'].includes(t.id))
+    ? allTabs.filter(t => ['dashboard', 'driver_requests', 'vehicles', 'agenda', 'register', 'maintenances', 'report_issue'].includes(t.id))
+    : user.role === 'motorista'
+    ? allTabs.filter(t => ['driver_requests'].includes(t.id))
     : allTabs.filter(t => t.id !== 'report_issue');
 
   return (
@@ -2419,7 +2600,7 @@ export default function App() {
                         <User size={16} />
                     </div>
                     <div>
-                        <p className="text-sm font-bold text-slate-700">{user.role === 'admin' ? 'Administrador' : 'Mecânico'}</p>
+                        <p className="text-sm font-bold text-slate-700">{user.role === 'admin' ? 'Administrador' : user.role === 'motorista' ? 'Motorista' : 'Mecânico'}</p>
                         <p className="text-[10px] text-slate-400 uppercase">Logado</p>
                     </div>
                 </div>
@@ -2464,6 +2645,16 @@ export default function App() {
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'dashboard' && <Dashboard vehicles={vehicles} stats={stats} intervals={intervals} maintenances={allMaintenances} role={user.role} />}
+            {activeTab === 'driver_requests' && (
+              <DriverRequests 
+                requests={driverRequests} 
+                role={user.role} 
+                username={user.username} 
+                onSubmit={handleDriverRequestSubmit} 
+                onResolve={handleDriverRequestResolve} 
+                vehicles={vehicles}
+              />
+            )}
             
             {activeTab === 'contracts' && <Contracts vehicles={vehicles} />}
 

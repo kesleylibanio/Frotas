@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS app_users (
   role TEXT NOT NULL
 );
 
+-- Create driver_requests table
+CREATE TABLE IF NOT EXISTS driver_requests (
+  id SERIAL PRIMARY KEY,
+  driver_name TEXT NOT NULL,
+  vehicle_plate TEXT NOT NULL,
+  description TEXT NOT NULL,
+  status TEXT DEFAULT 'pendente',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Insert default users
 INSERT INTO app_users (username, password, role) VALUES
   ('administrador', 'admin2013', 'admin'),

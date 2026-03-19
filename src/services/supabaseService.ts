@@ -305,7 +305,7 @@ export const supabaseService = {
   },
 
   // Auth
-  login: async (username: string, password: string): Promise<'admin' | 'mechanic' | null> => {
+  login: async (username: string, password: string): Promise<'admin' | 'mechanic' | 'motorista' | null> => {
     const { data, error } = await getSupabase()
       .from('app_users')
       .select('role')
@@ -314,6 +314,47 @@ export const supabaseService = {
       .single();
     
     if (error || !data) return null;
-    return data.role as 'admin' | 'mechanic';
+    return data.role as 'admin' | 'mechanic' | 'motorista';
+  },
+
+  register: async (username: string, password: string): Promise<boolean> => {
+    const { error } = await getSupabase()
+      .from('app_users')
+      .insert([{ username, password, role: 'motorista' }]);
+    
+    if (error) throw error;
+    return true;
+  },
+
+  // Driver Requests
+  getDriverRequests: async () => {
+    const { data, error } = await getSupabase()
+      .from('driver_requests')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  saveDriverRequest: async (request: any) => {
+    const { id, ...payload } = request;
+    const { data, error } = await getSupabase()
+      .from('driver_requests')
+      .insert([payload])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  updateDriverRequestStatus: async (id: number, status: 'pendente' | 'resolvida') => {
+    const { data, error } = await getSupabase()
+      .from('driver_requests')
+      .update({ status })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   }
 };

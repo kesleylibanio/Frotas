@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'mechanic';
+export type Role = 'admin' | 'mechanic' | 'motorista';
 
 export interface User {
   id?: string;
@@ -70,6 +70,15 @@ export interface ReportIssue {
   id: number;
   maintenance_id: number;
   mechanic_name: string;
+  description: string;
+  status: 'pendente' | 'resolvida';
+  created_at: string;
+}
+
+export interface DriverRequest {
+  id: number;
+  driver_name: string;
+  vehicle_plate: string;
   description: string;
   status: 'pendente' | 'resolvida';
   created_at: string;
