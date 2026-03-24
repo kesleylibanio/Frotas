@@ -217,7 +217,10 @@ const Contracts = ({ vehicles }: { vehicles: Vehicle[] }) => {
                     <h3 className="font-bold text-slate-800">Veículo {v.plate}</h3>
                     <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">{v.contract_company}</span>
                   </div>
-                  <p className="text-sm text-slate-500">{v.plate} • {v.type}</p>
+                  <p className="text-sm text-slate-500">
+                    {v.plate} • {v.type}
+                    {v.brand && ` • ${v.brand}`}
+                  </p>
                   <p className="text-sm font-bold text-emerald-600 mt-1">R$ {(v.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} / mês</p>
                 </div>
                 <div className="text-right">
@@ -254,7 +257,12 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
       .sort((a, b) => b.km - a.km);
     
     return intervals
-      .filter(i => (i.measurement_type || 'odometer') === (v.measurement_type || 'odometer'))
+      .filter(i => {
+        const matchesMeasurement = (i.measurement_type || 'odometer') === (v.measurement_type || 'odometer');
+        const matchesBrand = !i.brand || (v.brand && v.brand.toLowerCase() === i.brand.toLowerCase());
+        const matchesType = !i.vehicle_type || (v.type && v.type.toLowerCase() === i.vehicle_type.toLowerCase());
+        return matchesMeasurement && matchesBrand && matchesType;
+      })
       .map(interval => {
         const lastService = vehicleMaintenances.find(m => {
           const services = JSON.parse(m.services || '[]');
@@ -305,7 +313,10 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                         <h3 className="font-bold text-slate-800">Veículo {v.plate}</h3>
                         <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold uppercase">{service}</span>
                       </div>
-                      <p className="text-sm text-slate-500">{v.plate} • {v.type}</p>
+                      <p className="text-sm text-slate-500">
+                        {v.plate} • {v.type}
+                        {(v.brand || v.model) && ` • ${v.brand || ''} ${v.model || ''}`}
+                      </p>
                     </div>
                     <div className="text-right">
                       <span className={`text-sm font-bold ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
@@ -408,7 +419,10 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                 </div>
                 <div>
                   <h3 className="text-3xl font-black text-slate-800 tracking-tight">Veículo {spotlightVehicle.plate}</h3>
-                  <p className="text-slate-500 font-medium">{spotlightVehicle.plate} • {spotlightVehicle.type}</p>
+                  <p className="text-slate-500 font-medium">
+                    {spotlightVehicle.plate} • {spotlightVehicle.type}
+                    {spotlightVehicle.brand && ` • ${spotlightVehicle.brand}`}
+                  </p>
                 </div>
               </div>
 
@@ -545,7 +559,8 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete, userRole 
   const [search, setSearch] = useState('');
   const filtered = vehicles.filter(v => 
     v.plate.toLowerCase().includes(search.toLowerCase()) || 
-    v.type.toLowerCase().includes(search.toLowerCase())
+    v.type.toLowerCase().includes(search.toLowerCase()) ||
+    (v.brand && v.brand.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
@@ -554,7 +569,7 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete, userRole 
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
-            placeholder="Buscar por placa..."
+            placeholder="Buscar por placa, tipo ou marca..."
             className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-red-500"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -580,7 +595,14 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete, userRole 
                   <Truck size={24} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-800">{v.plate}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-800">{v.plate}</h3>
+                    {v.brand && (
+                      <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase">
+                        {v.brand}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-slate-500">{v.type}</p>
                 </div>
               </div>
@@ -642,6 +664,7 @@ const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>,
   const [formData, setFormData] = useState({
     type: (['Carreta', 'Pipa20', 'Pipa10', 'Traçado'].includes(vehicle.type as any) ? vehicle.type : (vehicle.type === 'Caminhão Traçado' as any || vehicle.type === 'Traçado' as any ? 'Traçado' : (vehicle.type === 'Pipa de 20mil L' as any || vehicle.type === 'Pipa20' as any ? 'Pipa20' : (vehicle.type === 'Pipa de 10mil L' as any || vehicle.type === 'Pipa10' as any ? 'Pipa10' : 'Carreta')))) || 'Carreta',
     plate: vehicle.plate || '',
+    brand: vehicle.brand || '',
     measurement_type: (['odometer', 'hour_meter'].includes(vehicle.measurement_type as string) ? vehicle.measurement_type : 'odometer') || 'odometer',
     km_current: vehicle.km_current !== undefined ? vehicle.km_current : '',
     status: (['Rodando', 'Em manutenção', 'Parado'].includes(vehicle.status as string) ? vehicle.status : 'Rodando') || 'Rodando',
@@ -680,6 +703,14 @@ const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>,
           maxLength={7}
           required 
         />
+        <div className="grid grid-cols-1 gap-2">
+          <Input 
+            label="Marca" 
+            value={formData.brand} 
+            onChange={(e: any) => setFormData({...formData, brand: e.target.value})} 
+            placeholder="Ex: Volvo"
+          />
+        </div>
         <Select 
           label="Tipo" 
           value={formData.type} 
@@ -1416,7 +1447,13 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
 
 const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: MaintenanceInterval[], onSaveInterval: (data: any) => void, onDeleteInterval: (id: number) => void }) => {
   const [activeType, setActiveType] = useState<'odometer' | 'hour_meter'>('odometer');
-  const [newInterval, setNewInterval] = useState({ service_type: 'Geral', interval_km: 10000, measurement_type: 'odometer' as 'odometer' | 'hour_meter' });
+  const [newInterval, setNewInterval] = useState({ 
+    service_type: 'Geral', 
+    interval_km: 10000, 
+    measurement_type: 'odometer' as 'odometer' | 'hour_meter',
+    brand: '',
+    vehicle_type: ''
+  });
   const [editingId, setEditingId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -1424,14 +1461,26 @@ const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: 
   }, [activeType]);
 
   const handleEdit = (i: MaintenanceInterval) => {
-    setNewInterval({ service_type: i.service_type, interval_km: i.interval_km, measurement_type: i.measurement_type });
+    setNewInterval({ 
+      service_type: i.service_type, 
+      interval_km: i.interval_km, 
+      measurement_type: i.measurement_type,
+      brand: i.brand || '',
+      vehicle_type: i.vehicle_type || ''
+    });
     setActiveType(i.measurement_type);
     setEditingId(i.id);
   };
 
   const handleSubmit = () => {
     onSaveInterval({ ...newInterval, id: editingId });
-    setNewInterval({ service_type: 'Geral', interval_km: activeType === 'odometer' ? 10000 : 250, measurement_type: activeType });
+    setNewInterval({ 
+      service_type: 'Geral', 
+      interval_km: activeType === 'odometer' ? 10000 : 250, 
+      measurement_type: activeType,
+      brand: '',
+      vehicle_type: '' 
+    });
     setEditingId(null);
   };
 
@@ -1464,7 +1513,7 @@ const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: 
           {editingId ? 'Editar Intervalo' : `Definir Intervalos (${activeType === 'odometer' ? 'KM' : 'Horas'})`}
         </h3>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <Select 
               label="Tipo de Serviço" 
               value={newInterval.service_type} 
@@ -1472,6 +1521,24 @@ const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: 
               options={[
                 { label: 'Geral', value: 'Geral' },
                 ...MAINTENANCE_TYPES.map(s => ({ label: s, value: s }))
+              ]}
+            />
+            <Input 
+              label="Marca (Opcional)" 
+              value={newInterval.brand} 
+              onChange={(e: any) => setNewInterval({...newInterval, brand: e.target.value})}
+              placeholder="Ex: Volvo"
+            />
+            <Select 
+              label="Tipo de Veículo" 
+              value={newInterval.vehicle_type} 
+              onChange={(e: any) => setNewInterval({...newInterval, vehicle_type: e.target.value})}
+              options={[
+                { label: 'Todos', value: '' },
+                { label: 'Carreta', value: 'Carreta' },
+                { label: 'Pipa10', value: 'Pipa10' },
+                { label: 'Pipa20', value: 'Pipa20' },
+                { label: 'Caminhão Traçado', value: 'Traçado' },
               ]}
             />
             <Input 
@@ -1504,7 +1571,14 @@ const Settings = ({ intervals, onSaveInterval, onDeleteInterval }: { intervals: 
               ) : (
                 filteredIntervals.map(i => (
                   <div key={i.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <span className="font-medium text-slate-700">{i.service_type}</span>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-slate-700">{i.service_type}</span>
+                      {(i.brand || i.vehicle_type) && (
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">
+                          {i.brand && `Marca: ${i.brand}`} {i.vehicle_type && `• Tipo: ${i.vehicle_type}`}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4">
                       <span className="font-mono font-bold text-red-600">
                         {i.interval_km.toLocaleString()} {activeType === 'odometer' ? 'km' : 'h'}

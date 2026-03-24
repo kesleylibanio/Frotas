@@ -11,6 +11,7 @@ export interface User {
 export interface Vehicle {
   id: number;
   type: 'Carreta' | 'Pipa20' | 'Pipa10' | 'Traçado';
+  brand?: string;
   plate: string;
   km_current: number;
   measurement_type?: 'odometer' | 'hour_meter';
@@ -47,6 +48,8 @@ export interface MaintenanceInterval {
   service_type: string;
   interval_km: number;
   measurement_type: 'odometer' | 'hour_meter';
+  brand?: string;
+  vehicle_type?: string;
 }
 
 export interface ReportData {
