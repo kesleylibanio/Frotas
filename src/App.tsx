@@ -282,11 +282,13 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
         const threshold = interval.interval_km * 0.1;
 
         if (remaining <= threshold) {
+          const nextKM = lastKM + interval.interval_km;
           return {
             vehicle: v,
             service: interval.service_type,
             interval: interval.interval_km,
             remaining,
+            nextKM,
             isOverdue: remaining < 0,
             type: 'maintenance'
           };
@@ -306,7 +308,7 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
           {maintenanceAlerts.length > 0 ? (
             <div className="grid gap-3">
               {maintenanceAlerts.map((alert, idx) => {
-                const { vehicle: v, service, remaining, isOverdue, interval } = alert;
+                const { vehicle: v, service, remaining, isOverdue, interval, nextKM } = alert;
                 
                 return (
                   <Card key={`${v.id}-${service}-${idx}`} className={`p-4 flex items-center justify-between border-l-4 ${isOverdue ? 'border-l-red-500 bg-red-50/30' : 'border-l-amber-500'}`}>
@@ -324,6 +326,9 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                       <span className={`text-sm font-bold ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
                         {isOverdue ? `Atrasado ${Math.abs(remaining).toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}` : `Faltam ${remaining.toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}`}
                       </span>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                        Próx. Troca: {nextKM.toLocaleString()} {v.measurement_type === 'hour_meter' ? 'h' : 'km'}
+                      </p>
                       <p className="text-xs text-slate-400">Intervalo: {v.measurement_type === 'hour_meter' ? `${interval}h` : `${(interval/1000).toFixed(0)}k km`}</p>
                     </div>
                   </Card>
@@ -450,6 +455,24 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Valor Contrato</p>
                   <p className="text-sm font-bold text-emerald-600">R$ {(spotlightVehicle.contract_value || 0).toLocaleString('pt-BR')}</p>
                 </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Próxima Troca</p>
+                  {(() => {
+                    const result = calculateNextOilChange(spotlightVehicle, intervals, maintenances);
+                    if (!result) return <p className="text-sm font-bold text-slate-400 italic">Não config.</p>;
+                    
+                    const isOverdue = (spotlightVehicle.km_current || 0) >= result.nextKM;
+                    
+                    return (
+                      <p className={`text-sm font-black ${
+                        result.isApproaching ? 'text-red-600' : 'text-slate-800'
+                      }`}>
+                        {isOverdue ? 'VENCIDO: ' : ''}
+                        {result.nextKM.toLocaleString()} {spotlightVehicle.measurement_type === 'hour_meter' ? 'h' : 'km'}
+                      </p>
+                    );
+                  })()}
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -526,7 +549,7 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
         {maintenanceAlerts.length > 0 ? (
           <div className="grid gap-3">
             {maintenanceAlerts.map((alert, idx) => {
-              const { vehicle: v, service, remaining, isOverdue, interval } = alert;
+              const { vehicle: v, service, remaining, isOverdue, interval, nextKM } = alert;
               
               return (
                 <Card key={`${v.id}-${service}-${idx}`} className={`p-4 flex items-center justify-between border-l-4 ${isOverdue ? 'border-l-red-500 bg-red-50/30' : 'border-l-amber-500'}`}>
@@ -539,8 +562,14 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
                   </div>
                   <div className="text-right">
                     <span className={`text-sm font-bold ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
-                      {isOverdue ? `Atrasado ${Math.abs(remaining).toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}` : `Faltam ${remaining.toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}`}
+                      {isOverdue 
+                        ? `Atrasado ${Math.abs(remaining).toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}` 
+                        : `Faltam ${remaining.toLocaleString()} ${v.measurement_type === 'hour_meter' ? 'h' : 'km'}`
+                      }
                     </span>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                      Próx. Troca: {nextKM.toLocaleString()} {v.measurement_type === 'hour_meter' ? 'h' : 'km'}
+                    </p>
                     <p className="text-xs text-slate-400">Intervalo: {(interval/1000).toFixed(0)}k {v.measurement_type === 'hour_meter' ? 'h' : 'km'}</p>
                   </div>
                 </Card>
@@ -557,13 +586,17 @@ const Dashboard = ({ vehicles, stats, intervals, maintenances, role }: { vehicle
   );
 };
 
-const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete, userRole }: { vehicles: Vehicle[], onEdit: (v: Vehicle) => void, onSelect: (v: Vehicle) => void, onEditKM: (v: Vehicle) => void, onDelete: (v: Vehicle) => void, userRole: string }) => {
+const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete, userRole, intervals, maintenances }: { vehicles: Vehicle[], onEdit: (v: Vehicle) => void, onSelect: (v: Vehicle) => void, onEditKM: (v: Vehicle) => void, onDelete: (v: Vehicle) => void, userRole: string, intervals: MaintenanceInterval[], maintenances: any[] }) => {
   const [search, setSearch] = useState('');
   const filtered = vehicles.filter(v => 
     v.plate.toLowerCase().includes(search.toLowerCase()) || 
     v.type.toLowerCase().includes(search.toLowerCase()) ||
     (v.brand && v.brand.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const getNextOilChange = (v: Vehicle) => {
+    return calculateNextOilChange(v, intervals, maintenances);
+  };
 
   return (
     <div className="space-y-4">
@@ -617,6 +650,19 @@ const VehicleList = ({ vehicles, onEdit, onSelect, onEditKM, onDelete, userRole 
                 </span>
                 <span className="text-xs font-mono text-slate-400">Atual: {v.km_current.toLocaleString()} {v.measurement_type === 'hour_meter' ? 'h' : 'km'}</span>
                 <span className="text-[10px] text-slate-400 italic">Últ. Manut: {(v.last_maintenance_km || 0).toLocaleString()} {v.measurement_type === 'hour_meter' ? 'h' : 'km'}</span>
+                {(() => {
+                  const result = getNextOilChange(v);
+                  if (!result) return null;
+                  const isOverdue = (v.km_current || 0) >= result.nextKM;
+                  return (
+                    <span className={`text-[10px] italic font-bold ${
+                      isOverdue ? 'text-red-600' : result.isApproaching ? 'text-red-500' : 'text-slate-400'
+                    }`}>
+                      {isOverdue ? 'VENCIDO: ' : 'Próx. Troca: '}
+                      {result.nextKM.toLocaleString()} {v.measurement_type === 'hour_meter' ? 'h' : 'km'}
+                    </span>
+                  );
+                })()}
                 <div className="flex gap-2">
                   <button 
                     onClick={(e) => {
@@ -2401,6 +2447,52 @@ const DriverRequests = ({ requests, role, username, onSubmit, onResolve, vehicle
   );
 };
 
+const calculateNextOilChange = (v: Vehicle, intervals: MaintenanceInterval[], maintenances: any[]) => {
+  const vehicleMaintenances = maintenances
+    .filter(m => m.vehicle_id === v.id)
+    .sort((a, b) => b.km - a.km);
+  
+  const vBrand = (v.brand || '').trim().toLowerCase();
+  const vType = (v.type || '').trim().toLowerCase();
+  const vMeasurement = (v.measurement_type || 'odometer').trim().toLowerCase();
+
+  const oilChangeInterval = intervals
+    .filter(i => i.service_type === 'Troca óleo')
+    .filter(i => (i.measurement_type || 'odometer').trim().toLowerCase() === vMeasurement)
+    .sort((a, b) => {
+      const scoreA = ((a.brand && a.brand.trim()) ? 2 : 0) + ((a.vehicle_type && a.vehicle_type.trim()) ? 1 : 0);
+      const scoreB = ((b.brand && b.brand.trim()) ? 2 : 0) + ((b.vehicle_type && b.vehicle_type.trim()) ? 1 : 0);
+      return scoreB - scoreA;
+    })
+    .find(i => {
+      const iBrand = (i.brand || '').trim().toLowerCase();
+      const iType = (i.vehicle_type || '').trim().toLowerCase();
+      const matchesBrand = !iBrand || vBrand === iBrand;
+      const matchesType = !iType || vType === iType;
+      return matchesBrand && matchesType;
+    });
+
+  if (!oilChangeInterval) return null;
+
+  const lastOilChange = vehicleMaintenances.find(m => {
+    try {
+      const services = JSON.parse(m.services || '[]');
+      return services.some((s: any) => (typeof s === 'object' ? s.name : s) === 'Troca óleo');
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const lastKM = lastOilChange ? lastOilChange.km : (v.last_maintenance_km || 0);
+  const nextKM = lastKM + oilChangeInterval.interval_km;
+  
+  return {
+    nextKM,
+    isApproaching: (v.km_current || 0) >= nextKM * 0.9,
+    interval: oilChangeInterval.interval_km
+  };
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -2759,6 +2851,8 @@ export default function App() {
               ) : (
                 <VehicleList 
                   vehicles={vehicles} 
+                  intervals={intervals}
+                  maintenances={allMaintenances}
                   onEdit={(v) => setEditingVehicle(v)} 
                   onSelect={viewHistory}
                   onEditKM={(v) => {
@@ -2833,7 +2927,10 @@ export default function App() {
                           </div>
                           <div className="flex items-center gap-3">
                             <button 
-                              onClick={() => generateMaintenancePDF(m, v, intervals, allMaintenances)}
+                              onClick={() => {
+                                const nextOilChange = v ? calculateNextOilChange(v, intervals, allMaintenances) : null;
+                                generateMaintenancePDF(m, v, intervals, allMaintenances, nextOilChange?.nextKM);
+                              }}
                               className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
                               title="Baixar PDF"
                             >
