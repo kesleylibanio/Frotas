@@ -12,6 +12,7 @@ export interface Vehicle {
   id: number;
   type: 'Carreta' | 'Pipa20' | 'Pipa10' | 'Traçado';
   brand?: string;
+  description?: string;
   plate: string;
   km_current: number;
   measurement_type?: 'odometer' | 'hour_meter';
@@ -31,7 +32,8 @@ export interface Maintenance {
   vehicle_id: number;
   vehicle_plate?: string;
   vehicle_type?: string;
-  date: string;
+  date: string; // Start Date
+  end_date?: string;
   start_time?: string;
   end_time?: string;
   type: 'Preventiva' | 'Corretiva' | 'Preditiva';

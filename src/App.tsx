@@ -34,6 +34,7 @@ import {
   Edit,
   Edit3,
   FileText,
+  FileDown,
   LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -64,6 +65,7 @@ import {
   ReportData
 } from './types';
 import { supabaseService } from './services/supabaseService';
+import { generateMaintenancePDF } from './utils/pdfGenerator';
 
 // --- Components ---
 
@@ -668,6 +670,7 @@ const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>,
     measurement_type: (['odometer', 'hour_meter'].includes(vehicle.measurement_type as string) ? vehicle.measurement_type : 'odometer') || 'odometer',
     km_current: vehicle.km_current !== undefined ? vehicle.km_current : '',
     status: (['Rodando', 'Em manutenção', 'Parado'].includes(vehicle.status as string) ? vehicle.status : 'Rodando') || 'Rodando',
+    description: vehicle.description || '',
     is_contracted: !!vehicle.is_contracted,
     contract_company: vehicle.contract_company || '',
     contract_work: vehicle.contract_work || '',
@@ -709,6 +712,13 @@ const VehicleForm = ({ vehicle, onSave, onCancel }: { vehicle: Partial<Vehicle>,
             value={formData.brand} 
             onChange={(e: any) => setFormData({...formData, brand: e.target.value})} 
             placeholder="Ex: Volvo"
+          />
+          <Input 
+            label="Descrição do Equipamento" 
+            value={formData.description} 
+            onChange={(e: any) => setFormData({...formData, description: e.target.value.slice(0, 50)})} 
+            placeholder="Ex: Caminhão Pipa 20 mil litros"
+            maxLength={50}
           />
         </div>
         <Select 
@@ -1047,7 +1057,8 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
         services: JSON.parse(initialData.services || '[]'),
         type: initialData.type || 'Preventiva',
         start_time: initialData.start_time || '',
-        end_time: initialData.end_time || ''
+        end_time: initialData.end_time || '',
+        end_date: initialData.end_date || initialData.date || ''
       };
     }
     
@@ -1056,12 +1067,15 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
       return JSON.parse(saved);
     }
 
+    const today = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+
     return {
       vehicle_id: '',
-      date: (() => {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      })(),
+      date: today,
+      end_date: today,
       start_time: '',
       end_time: '',
       type: 'Preventiva' as 'Preventiva' | 'Corretiva' | 'Preditiva',
@@ -1206,7 +1220,10 @@ const MaintenanceForm = ({ vehicles, mechanics, onSave, onCancel, initialData }:
             ...vehicles.map((v: any) => ({ label: v.plate, value: v.id }))
           ]}
         />
-        <Input label="Data" type="date" value={formData.date} onChange={(e: any) => setFormData({...formData, date: e.target.value})} required />
+        <div className="grid grid-cols-2 gap-2">
+          <Input label="Data Início" type="date" value={formData.date} onChange={(e: any) => setFormData({...formData, date: e.target.value})} required />
+          <Input label="Data Término" type="date" value={formData.end_date} onChange={(e: any) => setFormData({...formData, end_date: e.target.value})} required />
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <Input 
             label="Hora Início" 
@@ -2815,6 +2832,13 @@ export default function App() {
                             <p className="text-xs text-slate-500 flex items-center gap-1"><User size={12} /> {m.mechanic}</p>
                           </div>
                           <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => generateMaintenancePDF(m, v, intervals, allMaintenances)}
+                              className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                              title="Baixar PDF"
+                            >
+                              <FileDown size={16} />
+                            </button>
                             <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">
                               {m.km.toLocaleString()} {isHourMeter ? 'h' : 'km'}
                             </span>
