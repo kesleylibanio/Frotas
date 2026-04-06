@@ -51,6 +51,9 @@ export const generateMaintenancePDF = (
   // Helper for "Não informado"
   const val = (v: any) => (v === null || v === undefined || v === '' ? 'Não informado' : v);
 
+  const unit = vehicle?.measurement_type === 'hour_meter' ? 'horas' : 'km';
+  const measurementLabel = vehicle?.measurement_type === 'hour_meter' ? 'Horímetro' : 'Odômetro';
+
   // Layout
   doc.setFontSize(10);
   
@@ -72,15 +75,15 @@ export const generateMaintenancePDF = (
   doc.setFont('helvetica', 'normal');
   doc.text(`Placa / TAG: ${val(maintenance.vehicle_plate)}`, 15, 46);
   doc.text(`Equipamento: ${val(vehicle?.description)}`, 80, 46);
-  doc.text(`Odômetro: ${val(maintenance.km.toLocaleString())}`, 150, 46);
+  doc.text(`${measurementLabel}: ${val(maintenance.km.toLocaleString())}`, 150, 46);
   doc.line(10, 50, 200, 50);
 
   // [TROCA DE ÓLEO]
   doc.setFont('helvetica', 'bold');
   doc.text('TROCA DE ÓLEO', 15, 57);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Última troca: ${lastOilChangeDate} - ${lastOilChangeKM} km`, 15, 63);
-  doc.text(`Próxima troca: ${nextChangeKM} km`, 15, 69);
+  doc.text(`Última troca: ${lastOilChangeDate} - ${lastOilChangeKM} ${unit}`, 15, 63);
+  doc.text(`Próxima troca: ${nextChangeKM} ${unit}`, 15, 69);
   doc.line(10, 73, 200, 73);
 
   // [MANUTENÇÃO]
@@ -89,21 +92,49 @@ export const generateMaintenancePDF = (
   doc.setFont('helvetica', 'normal');
   doc.text(`Tipo: ${val(maintenance.type)}`, 15, 86);
   doc.text('Descrição dos Serviços Realizados:', 15, 92);
-  const servicesText = currentServicesNames.join(', ').replace(/, ([^,]*)$/, ' e $1');
-  doc.text(servicesText, 15, 98, { maxWidth: 180 });
-  doc.line(10, 110, 200, 110);
+  
+  let servicesText = currentServicesNames.join(', ').replace(/, ([^,]*)$/, ' e $1');
+  if (maintenance.other_services) {
+    servicesText += (servicesText ? ', ' : '') + maintenance.other_services;
+  }
+  
+  const splitServices = doc.splitTextToSize(servicesText || 'Nenhum serviço selecionado', 180);
+  doc.text(splitServices, 15, 98);
+  
+  const servicesHeight = splitServices.length * 5;
+  let currentY = 98 + servicesHeight + 5;
+
+  // [OBSERVAÇÕES GERAIS]
+  doc.setFont('helvetica', 'bold');
+  doc.text('OBSERVAÇÕES GERAIS', 15, currentY);
+  doc.setFont('helvetica', 'normal');
+  currentY += 6;
+  const splitObs = doc.splitTextToSize(val(maintenance.observations), 180);
+  doc.text(splitObs, 15, currentY);
+  
+  currentY += (splitObs.length * 5) + 5;
+  doc.line(10, currentY, 200, currentY);
+  currentY += 7;
 
   // [RODAPÉ]
   doc.setFont('helvetica', 'bold');
-  doc.text('RODAPÉ', 15, 117);
+  doc.text('RODAPÉ', 15, currentY);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Data início: ${val(maintenance.date)} | Hora início: ${val(maintenance.start_time)}`, 15, 123);
-  doc.text(`Data fim: ${val(maintenance.end_date)} | Hora fim: ${val(maintenance.end_time)}`, 15, 129);
-  doc.text(`Responsável: ${val(maintenance.mechanic)}`, 15, 135);
+  currentY += 6;
+  doc.text(`Data início: ${val(maintenance.date)} | Hora início: ${val(maintenance.start_time)}`, 15, currentY);
+  currentY += 6;
+  doc.text(`Data fim: ${val(maintenance.end_date)} | Hora fim: ${val(maintenance.end_time)}`, 15, currentY);
+  currentY += 6;
+  doc.text(`Responsável: ${val(maintenance.mechanic)}`, 15, currentY);
 
   // [ASSINATURA]
-  doc.line(60, 154, 150, 154);
-  doc.text('Assinatura do responsável', 105, 159, { align: 'center' });
+  currentY += 20;
+  if (currentY > 270) {
+    doc.addPage();
+    currentY = 20;
+  }
+  doc.line(60, currentY, 150, currentY);
+  doc.text('Assinatura do responsável', 105, currentY + 5, { align: 'center' });
 
   doc.save(`OS_${maintenance.id}.pdf`);
 };
