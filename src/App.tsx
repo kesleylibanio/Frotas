@@ -224,6 +224,11 @@ const Contracts = ({ vehicles }: { vehicles: Vehicle[] }) => {
                     {v.brand && ` • ${v.brand}`}
                   </p>
                   <p className="text-sm font-bold text-emerald-600 mt-1">R$ {(v.contract_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} / mês</p>
+                  {v.contract_start_date && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Início: {new Date(v.contract_start_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-semibold text-slate-500 uppercase">Fechamento</p>
